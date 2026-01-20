@@ -1,80 +1,15 @@
 "use client"
 
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
-
-const projects: Project[] = [
-  {
-    id: "1",
-    name: "Website Redesign",
-    description: "Redesigning the main website with modern UI/UX principles",
-    status: "in-progress",
-    color: "bg-chart-1",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-      { name: "David", avatar: "/man-designer.png" },
-    ],
-    taskCount: 8,
-    completedTasks: 2,
-  },
-  {
-    id: "2",
-    name: "Mobile App",
-    description: "Building a cross-platform mobile application",
-    status: "in-progress",
-    color: "bg-chart-2",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-    ],
-    taskCount: 12,
-    completedTasks: 5,
-  },
-  {
-    id: "3",
-    name: "Marketing Campaign",
-    description: "Q1 marketing campaign planning and execution",
-    status: "planning",
-    color: "bg-chart-3",
-    teamMembers: [
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 6,
-    completedTasks: 0,
-  },
-  {
-    id: "4",
-    name: "API Development",
-    description: "RESTful API development and documentation",
-    status: "completed",
-    color: "bg-chart-4",
-    teamMembers: [
-      { name: "David", avatar: "/man-designer.png" },
-      { name: "Alice", avatar: "/professional-woman.png" },
-    ],
-    taskCount: 15,
-    completedTasks: 15,
-  },
-  {
-    id: "5",
-    name: "Database Migration",
-    description: "Migrating to a new database system",
-    status: "on-hold",
-    color: "bg-chart-5",
-    teamMembers: [
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 10,
-    completedTasks: 3,
-  },
-]
+import { useProjects } from "@/contexts/projects-context"
+import { useTasks } from "@/contexts/tasks-context"
+import { useColumns } from "@/contexts/columns-context"
+import { AddProjectDialog } from "@/components/add-project-dialog"
 
 const statusConfig = {
   "in-progress": {
@@ -101,14 +36,41 @@ const statusConfig = {
 
 export function ProjectsList() {
   const router = useRouter()
+  const { projects } = useProjects()
+  const { getTasks } = useTasks()
+  const { getColumns } = useColumns()
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Calculate project stats dynamically from tasks
+  const projectsWithStats = useMemo(() => {
+    return projects.map((project) => {
+      const tasks = getTasks(project.id)
+      const columns = getColumns(project.id)
+      
+      // Find the "done" column ID (could be "done" or any column with "done" in the title)
+      const doneColumnId = columns.find((col) => 
+        col.id === "done" || col.title.toLowerCase().includes("done")
+      )?.id
+
+      const taskCount = tasks.length
+      const completedTasks = doneColumnId
+        ? tasks.filter((task) => task.columnId === doneColumnId).length
+        : 0
+
+      return {
+        ...project,
+        taskCount,
+        completedTasks,
+      }
+    })
+  }, [projects, getTasks, getColumns])
 
   const handleProjectClick = (projectId: string) => {
     router.push(`/projects/${projectId}`)
   }
 
   const handleCreateProject = () => {
-    // TODO: Implement create project modal/dialog
-    console.log("Create new project")
+    setIsDialogOpen(true)
   }
 
   return (
@@ -132,10 +94,10 @@ export function ProjectsList() {
 
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project) => {
+        {projectsWithStats.map((project) => {
           const statusInfo = statusConfig[project.status]
           const StatusIcon = statusInfo.icon
-          const progress = project.taskCount
+          const progress = project.taskCount > 0
             ? Math.round((project.completedTasks || 0) / project.taskCount * 100)
             : 0
 
@@ -171,7 +133,7 @@ export function ProjectsList() {
               </p>
 
               {/* Progress */}
-              {project.taskCount && project.taskCount > 0 && (
+              {project.taskCount > 0 ? (
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
                     <span>Progress</span>
@@ -185,6 +147,22 @@ export function ProjectsList() {
                   </div>
                   <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
                     <span>{project.completedTasks || 0} of {project.taskCount} tasks completed</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                    <span>Progress</span>
+                    <span className="font-medium">0%</span>
+                  </div>
+                  <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all"
+                      style={{ width: "0%" }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
+                    <span>0 tasks</span>
                   </div>
                 </div>
               )}
@@ -239,6 +217,9 @@ export function ProjectsList() {
           </Button>
         </div>
       )}
+
+      {/* Add Project Dialog */}
+      <AddProjectDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
     </div>
   )
 }

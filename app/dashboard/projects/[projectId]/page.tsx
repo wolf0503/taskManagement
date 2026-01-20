@@ -9,94 +9,26 @@ import { cn } from "@/lib/utils"
 import type { Project } from "@/lib/types"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-// Mock project data - in a real app, this would come from an API
-const mockProjects: Record<string, Project> = {
-  "1": {
-    id: "1",
-    name: "Website Redesign",
-    description: "Redesigning the main website with modern UI/UX principles",
-    status: "in-progress",
-    color: "bg-chart-1",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-      { name: "David", avatar: "/man-designer.png" },
-    ],
-    taskCount: 8,
-    completedTasks: 2,
-  },
-  "2": {
-    id: "2",
-    name: "Mobile App",
-    description: "Building a cross-platform mobile application",
-    status: "in-progress",
-    color: "bg-chart-2",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-    ],
-    taskCount: 12,
-    completedTasks: 5,
-  },
-  "3": {
-    id: "3",
-    name: "Marketing Campaign",
-    description: "Q1 marketing campaign planning and execution",
-    status: "planning",
-    color: "bg-chart-3",
-    teamMembers: [
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 6,
-    completedTasks: 0,
-  },
-  "4": {
-    id: "4",
-    name: "API Development",
-    description: "RESTful API development and documentation",
-    status: "completed",
-    color: "bg-chart-4",
-    teamMembers: [
-      { name: "David", avatar: "/man-designer.png" },
-      { name: "Alice", avatar: "/professional-woman.png" },
-    ],
-    taskCount: 15,
-    completedTasks: 15,
-  },
-  "5": {
-    id: "5",
-    name: "Database Migration",
-    description: "Migrating to a new database system",
-    status: "on-hold",
-    color: "bg-chart-5",
-    teamMembers: [
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 10,
-    completedTasks: 3,
-  },
-}
+import { useProjects } from "@/contexts/projects-context"
 
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
   const projectId = params.projectId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { getProject } = useProjects()
   const [project, setProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    // In a real app, fetch project data from API
-    const foundProject = mockProjects[projectId]
+    // Get project from context
+    const foundProject = getProject(projectId)
     if (foundProject) {
       setProject(foundProject)
     } else {
       // Project not found, redirect to dashboard
       router.push("/dashboard")
     }
-  }, [projectId, router])
+  }, [projectId, router, getProject])
 
   if (!project) {
     return (
@@ -145,8 +77,8 @@ export default function ProjectDetailPage() {
           </Button>
         </div>
 
-        <Header project={project} />
-        <TaskBoard />
+        <Header project={project} projectId={projectId} />
+        <TaskBoard projectId={projectId} />
       </main>
     </div>
   )

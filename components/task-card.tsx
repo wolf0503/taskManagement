@@ -12,7 +12,7 @@ import type { Task } from "@/lib/types"
 
 interface TaskCardProps {
   task: Task
-  onDragStart: (task: Task) => void
+  onDragStart: (taskId: string, columnId: string) => void
   onDragEnd: () => void
   index: number
 }
@@ -45,7 +45,7 @@ export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps)
   const handleDragStart = (e: React.DragEvent) => {
     setIsDragging(true)
     e.dataTransfer.effectAllowed = "move"
-    onDragStart(task)
+    onDragStart(task.id, task.columnId)
   }
 
   const handleDragEnd = () => {

@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import type React from "react"
 
 import { cn } from "@/lib/utils"
@@ -7,18 +8,31 @@ import { TaskCard } from "@/components/task-card"
 import { Button } from "@/components/ui/button"
 import { Plus, MoreHorizontal } from "lucide-react"
 import type { Task, Column } from "@/lib/types"
+import { AddTaskDialog } from "@/components/add-task-dialog"
 
 interface TaskColumnProps {
   column: Column
   tasks: Task[]
-  onDragStart: (task: Task) => void
+  onDragStart: (taskId: string, columnId: string) => void
   onDragEnd: () => void
   onDrop: (columnId: string) => void
-  draggedTask: Task | null
+  draggedTask: { id: string; columnId: string } | null
   index: number
+  projectId: string
 }
 
-export function TaskColumn({ column, tasks, onDragStart, onDragEnd, onDrop, draggedTask, index }: TaskColumnProps) {
+export function TaskColumn({
+  column,
+  tasks,
+  onDragStart,
+  onDragEnd,
+  onDrop,
+  draggedTask,
+  index,
+  projectId,
+}: TaskColumnProps) {
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
   }
@@ -43,7 +57,12 @@ export function TaskColumn({ column, tasks, onDragStart, onDragEnd, onDrop, drag
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => setIsDialogOpen(true)}
+          >
             <Plus className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
@@ -69,13 +88,26 @@ export function TaskColumn({ column, tasks, onDragStart, onDragEnd, onDrop, drag
         {tasks.length === 0 && (
           <div className="glass-subtle rounded-xl p-8 text-center">
             <p className="text-sm text-muted-foreground">No tasks yet</p>
-            <Button variant="ghost" size="sm" className="mt-2 gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 gap-1"
+              onClick={() => setIsDialogOpen(true)}
+            >
               <Plus className="h-3 w-3" />
               Add Task
             </Button>
           </div>
         )}
       </div>
+
+      {/* Add Task Dialog */}
+      <AddTaskDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        projectId={projectId}
+        defaultColumnId={column.id}
+      />
     </div>
   )
 }
