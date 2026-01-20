@@ -103,7 +103,7 @@ export function ProjectsList() {
   const router = useRouter()
 
   const handleProjectClick = (projectId: string) => {
-    router.push(`/dashboard/projects/${projectId}`)
+    router.push(`/projects/${projectId}`)
   }
 
   const handleCreateProject = () => {
