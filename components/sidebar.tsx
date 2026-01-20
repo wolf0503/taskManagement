@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -18,11 +19,11 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", active: false },
-  { icon: FolderKanban, label: "Projects", active: true },
-  { icon: Calendar, label: "Calendar", active: false },
-  { icon: Users, label: "Team", active: false },
-  { icon: Settings, label: "Settings", active: false },
+  { icon: LayoutDashboard, label: "Dashboards", active: false, href: "/dashboard" },
+  { icon: FolderKanban, label: "Projects", active: false, href: "/projects" },
+  { icon: Calendar, label: "Calendar", active: false, href: null },
+  { icon: Users, label: "Team", active: false, href: null },
+  { icon: Settings, label: "Settings", active: false, href: null },
 ]
 
 const projects = [
@@ -39,6 +40,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: SidebarProps = {}) {
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
   
   const collapsed = collapsedProp !== undefined ? collapsedProp : internalCollapsed
   const setCollapsed = (value: boolean | ((prev: boolean) => boolean)) => {
@@ -112,23 +115,33 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
 
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
-                item.active
-                  ? "bg-primary/20 text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-              )}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              <span className={cn("text-sm font-medium transition-opacity", collapsed && "opacity-0")}>
-                {item.label}
-              </span>
-              {item.active && !collapsed && <div className="ml-auto h-2 w-2 rounded-full bg-primary animate-pulse" />}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href ? pathname?.startsWith(item.href) : item.active
+            return (
+              <button
+                key={item.label}
+                onClick={() => {
+                  if (item.href) {
+                    router.push(item.href)
+                    setMobileOpen(false)
+                  }
+                }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                  isActive
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  item.href && "cursor-pointer",
+                )}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                <span className={cn("text-sm font-medium transition-opacity", collapsed && "opacity-0")}>
+                  {item.label}
+                </span>
+                {isActive && !collapsed && <div className="ml-auto h-2 w-2 rounded-full bg-primary animate-pulse" />}
+              </button>
+            )
+          })}
         </nav>
 
         {/* Projects */}
