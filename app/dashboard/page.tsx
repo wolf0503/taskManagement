@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,8 +19,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { 
-  BarChart3, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  BarChart3,
   TrendingUp, 
   Users, 
   CheckCircle2, 
@@ -31,7 +39,12 @@ import {
   ArrowDown,
   Calendar,
   Plus,
-  MoreVertical
+  MoreVertical,
+  Edit,
+  Trash2,
+  Copy,
+  Download,
+  Share2
 } from "lucide-react"
 
 // Mock project statistics
@@ -160,8 +173,39 @@ const projectStats = [
 ]
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<string | null>(null)
+  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({})
+  const [projectComments, setProjectComments] = useState<Record<string, any[]>>(
+    projectStats.reduce((acc, project) => ({
+      ...acc,
+      [project.id]: project.recentComments
+    }), {})
+  )
+
+  const handlePostComment = (projectId: string) => {
+    const commentText = commentTexts[projectId]?.trim()
+    if (!commentText) return
+
+    const newComment = {
+      user: "John Doe",
+      avatar: "/professional-avatar.png",
+      text: commentText,
+      time: "Just now"
+    }
+
+    setProjectComments(prev => ({
+      ...prev,
+      [projectId]: [newComment, ...(prev[projectId] || [])]
+    }))
+
+    setCommentTexts(prev => ({
+      ...prev,
+      [projectId]: ""
+    }))
+  }
 
   // Overall statistics
   const overallStats = [
@@ -296,8 +340,8 @@ export default function DashboardPage() {
           </Card>
 
           {/* Project Dashboards */}
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between px-2">
+          <div className="mb-6">
+            <div className="flex items-center justify-between px-2 mb-4">
               <h2 className="text-xl font-bold">Project Dashboards</h2>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="gap-1">
@@ -310,282 +354,115 @@ export default function DashboardPage() {
                 </Badge>
               </div>
             </div>
-            {projectStats.map((project) => (
-              <Card key={project.id} className="glass border-glass-border">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", project.color)}>
-                        <FolderKanban className="h-6 w-6 text-white" />
-                      </div>
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          {project.name}
-                          {project.completionRate === 100 && (
-                            <Badge variant="outline" className="bg-status-done/10 text-status-done border-status-done/30">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Completed
-                            </Badge>
-                          )}
-                        </CardTitle>
-                        <CardDescription className="flex items-center gap-2 mt-1">
-                          <Clock className="h-3 w-3" />
-                          Last activity: {project.lastActivity}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "flex items-center gap-1 px-2 py-1 rounded-lg text-sm font-medium",
-                        project.trendUp ? "bg-status-done/10 text-status-done" : "bg-destructive/10 text-destructive"
-                      )}>
-                        {project.trendUp ? (
-                          <ArrowUp className="h-3 w-3" />
-                        ) : (
-                          <ArrowDown className="h-3 w-3" />
-                        )}
-                        {project.trend}
-                      </div>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Progress Bar */}
-                  <div>
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-bold">{project.completionRate}%</span>
-                    </div>
-                    <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all", project.color)}
-                        style={{ width: `${project.completionRate}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-                      <span>{project.tasksCompleted} of {project.totalTasks} tasks</span>
-                      <span>{project.activeMembers} active members</span>
-                    </div>
-                  </div>
 
-                  {/* Visual Statistics - Task Distribution */}
-                  <div className="glass-subtle rounded-lg p-4">
-                    <h4 className="text-sm font-semibold mb-3">Task Distribution</h4>
-                    <div className="space-y-3">
-                      {/* To Do Bar */}
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">To Do</span>
-                          <span className="font-bold text-status-todo">{project.stats.todo} tasks</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-status-todo rounded-full transition-all"
-                            style={{ width: `${(project.stats.todo / project.totalTasks) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      {/* In Progress Bar */}
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">In Progress</span>
-                          <span className="font-bold text-accent">{project.stats.inProgress} tasks</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-accent rounded-full transition-all"
-                            style={{ width: `${(project.stats.inProgress / project.totalTasks) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      {/* Done Bar */}
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">Done</span>
-                          <span className="font-bold text-status-done">{project.stats.done} tasks</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-status-done rounded-full transition-all"
-                            style={{ width: `${(project.stats.done / project.totalTasks) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                      {/* Blockers */}
-                      {project.stats.blockers > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20">
-                          <div className="h-8 w-8 rounded-lg bg-destructive/20 flex items-center justify-center">
-                            <span className="text-destructive font-bold">{project.stats.blockers}</span>
+            {/* Dashboards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {projectStats.map((project) => (
+                  <Card 
+                    key={project.id} 
+                    className="glass border-glass-border hover:border-primary/50 transition-all group cursor-pointer"
+                    onClick={() => router.push(`/dashboard/${project.id}`)}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", project.color)}>
+                            <FolderKanban className="h-6 w-6 text-white" />
                           </div>
-                          <div className="flex-1">
-                            <div className="text-xs font-medium text-destructive">Active Blockers</div>
-                            <div className="text-xs text-muted-foreground">Requires attention</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Time & Performance Metrics */}
-                  <div className="glass-subtle rounded-lg p-4">
-                    <h4 className="text-sm font-semibold mb-3">Performance Metrics</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Time Progress Circle */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative w-20 h-20 mb-2">
-                          <svg className="transform -rotate-90 w-20 h-20">
-                            <circle
-                              cx="40"
-                              cy="40"
-                              r="36"
-                              stroke="currentColor"
-                              strokeWidth="8"
-                              fill="transparent"
-                              className="text-secondary"
-                            />
-                            <circle
-                              cx="40"
-                              cy="40"
-                              r="36"
-                              stroke="currentColor"
-                              strokeWidth="8"
-                              fill="transparent"
-                              strokeDasharray={`${2 * Math.PI * 36}`}
-                              strokeDashoffset={`${2 * Math.PI * 36 * (1 - parseInt(project.stats.timeSpent) / parseInt(project.stats.estimatedTime))}`}
-                              className="text-primary transition-all"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-xs font-bold">
-                              {Math.round((parseInt(project.stats.timeSpent) / parseInt(project.stats.estimatedTime)) * 100)}%
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs text-muted-foreground">Time Used</div>
-                          <div className="text-sm font-bold">{project.stats.timeSpent} / {project.stats.estimatedTime}</div>
-                        </div>
-                      </div>
-
-                      {/* Velocity Chart */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative w-20 h-20 mb-2 flex items-end justify-center gap-1">
-                          <div className="w-3 h-12 bg-primary/30 rounded-t"></div>
-                          <div className="w-3 h-16 bg-primary/50 rounded-t"></div>
-                          <div className="w-3 h-20 bg-primary rounded-t"></div>
-                          <div className="w-3 h-14 bg-primary/70 rounded-t"></div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs text-muted-foreground">Velocity</div>
-                          <div className="text-sm font-bold">{project.stats.velocity}</div>
-                        </div>
-                      </div>
-
-                      {/* Team Activity */}
-                      <div className="flex flex-col items-center">
-                        <div className="relative w-20 h-20 mb-2 flex items-center justify-center">
-                          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/20 to-accent/20"></div>
-                          <Users className="h-8 w-8 text-primary relative z-10" />
-                        </div>
-                        <div className="text-center">
-                          <div className="text-xs text-muted-foreground">Team Members</div>
-                          <div className="text-sm font-bold">{project.activeMembers} Active</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Comments Section */}
-                  <div className="border-t border-border pt-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                      <h4 className="text-sm font-semibold">Project Activity & Comments</h4>
-                      <Badge variant="secondary" className="ml-auto">{project.recentComments.length}</Badge>
-                    </div>
-
-                    {/* Add Comment Form */}
-                    <div className="mb-4 p-4 rounded-lg glass-subtle border border-border/50">
-                      <div className="flex gap-3">
-                        <Avatar className="h-8 w-8 ring-2 ring-background">
-                          <AvatarImage src="/professional-avatar.png" />
-                          <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                            JD
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-2">
-                          <Textarea
-                            placeholder={`Add a comment about ${project.name}...`}
-                            className="glass-subtle border-glass-border min-h-[80px] text-sm"
-                          />
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Button variant="ghost" size="sm" className="h-8 text-xs">
-                                <Activity className="h-3 w-3 mr-1" />
-                                Status Update
-                              </Button>
-                              <Button variant="ghost" size="sm" className="h-8 text-xs">
-                                <Clock className="h-3 w-3 mr-1" />
-                                Time Log
-                              </Button>
-                            </div>
-                            <Button size="sm" className="h-8">
-                              <MessageSquare className="h-3 w-3 mr-1" />
-                              Post Comment
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Comments List */}
-                    <div className="space-y-3">
-                      {project.recentComments.map((comment, idx) => (
-                        <div key={idx} className="group">
-                          <div className="flex gap-3 p-3 rounded-lg glass-subtle hover:bg-secondary/50 transition-colors">
-                            <Avatar className="h-8 w-8 ring-2 ring-background">
-                              <AvatarImage src={comment.avatar} />
-                              <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                                {comment.user[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium">{comment.user}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  Team Member
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-base truncate">{project.name}</CardTitle>
+                            <div className="flex items-center gap-2 mt-1">
+                              {project.completionRate === 100 && (
+                                <Badge variant="outline" className="bg-status-done/10 text-status-done border-status-done/30 text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Done
                                 </Badge>
-                                <span className="text-xs text-muted-foreground ml-auto">{comment.time}</span>
-                              </div>
-                              <p className="text-sm text-muted-foreground mb-2">{comment.text}</p>
-                              <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                                  <TrendingUp className="h-3 w-3" />
-                                  Like
-                                </button>
-                                <button className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                                  <MessageSquare className="h-3 w-3" />
-                                  Reply
-                                </button>
-                              </div>
+                              )}
+                              <span className="text-xs text-muted-foreground">{project.lastActivity}</span>
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="glass border-glass-border w-48">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project.id); }}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Dashboard
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              <Share2 className="h-4 w-4 mr-2" />
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Export Data
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => e.stopPropagation()}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Dashboard
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Progress */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs mb-1.5">
+                          <span className="text-muted-foreground">Progress</span>
+                          <span className="font-bold">{project.completionRate}%</span>
+                        </div>
+                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full transition-all", project.color)}
+                            style={{ width: `${project.completionRate}%` }}
+                          />
+                        </div>
+                      </div>
 
-                    {/* View All Comments */}
-                    <Button variant="ghost" size="sm" className="w-full mt-3">
-                      View All Comments ({project.recentComments.length + 3} total)
-                      <ArrowDown className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      {/* Quick Stats */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center p-2 rounded-lg glass-subtle">
+                          <div className="text-xs text-muted-foreground">To Do</div>
+                          <div className="text-lg font-bold text-status-todo">{project.stats.todo}</div>
+                        </div>
+                        <div className="text-center p-2 rounded-lg glass-subtle">
+                          <div className="text-xs text-muted-foreground">Active</div>
+                          <div className="text-lg font-bold text-accent">{project.stats.inProgress}</div>
+                        </div>
+                        <div className="text-center p-2 rounded-lg glass-subtle">
+                          <div className="text-xs text-muted-foreground">Done</div>
+                          <div className="text-lg font-bold text-status-done">{project.stats.done}</div>
+                        </div>
+                      </div>
+
+                      {/* Team & Trend */}
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">{project.activeMembers} members</span>
+                        </div>
+                        <div className={cn(
+                          "flex items-center gap-1 text-xs font-medium",
+                          project.trendUp ? "text-status-done" : "text-destructive"
+                        )}>
+                          {project.trendUp ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                          {project.trend}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
           </div>
         </div>
       </main>
@@ -649,6 +526,83 @@ export default function DashboardPage() {
             }}>
               <Plus className="h-4 w-4 mr-2" />
               Create Dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dashboard Dialog */}
+      <Dialog open={editingProject !== null} onOpenChange={(open) => !open && setEditingProject(null)}>
+        <DialogContent className="glass border-glass-border sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Edit className="h-4 w-4 text-primary" />
+              </div>
+              Edit Dashboard
+            </DialogTitle>
+            <DialogDescription>
+              Update dashboard settings and configuration
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {editingProject && projectStats.find(p => p.id === editingProject) && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dashboard-name">Dashboard Name</Label>
+                  <Input
+                    id="edit-dashboard-name"
+                    defaultValue={projectStats.find(p => p.id === editingProject)?.name}
+                    className="glass-subtle border-glass-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dashboard-description">Description</Label>
+                  <Textarea
+                    id="edit-dashboard-description"
+                    defaultValue={`Dashboard for ${projectStats.find(p => p.id === editingProject)?.name}`}
+                    className="glass-subtle border-glass-border min-h-[100px]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dashboard Settings</Label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 p-3 rounded-lg glass-subtle cursor-pointer">
+                      <input type="checkbox" className="rounded" defaultChecked />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">Show Task Distribution</div>
+                        <div className="text-xs text-muted-foreground">Display task breakdown charts</div>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 rounded-lg glass-subtle cursor-pointer">
+                      <input type="checkbox" className="rounded" defaultChecked />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">Show Performance Metrics</div>
+                        <div className="text-xs text-muted-foreground">Display time and velocity statistics</div>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 rounded-lg glass-subtle cursor-pointer">
+                      <input type="checkbox" className="rounded" defaultChecked />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">Show Comments</div>
+                        <div className="text-xs text-muted-foreground">Display recent activity and comments</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingProject(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              // TODO: Implement dashboard update
+              setEditingProject(null)
+            }}>
+              <Edit className="h-4 w-4 mr-2" />
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

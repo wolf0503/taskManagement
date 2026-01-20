@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", active: false, href: "/dashboard" },
+  { icon: LayoutDashboard, label: "Dashboards", active: false, href: "/dashboard" },
   { icon: FolderKanban, label: "Projects", active: false, href: "/projects" },
   { icon: Calendar, label: "Calendar", active: false, href: null },
   { icon: Users, label: "Team", active: false, href: null },
