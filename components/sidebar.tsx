@@ -21,9 +21,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboards", active: false, href: "/dashboard" },
   { icon: FolderKanban, label: "Projects", active: false, href: "/projects" },
-  { icon: Calendar, label: "Calendar", active: false, href: null },
-  { icon: Users, label: "Team", active: false, href: null },
-  { icon: Settings, label: "Settings", active: false, href: null },
+  { icon: Calendar, label: "Calendar", active: false, href: "/calendar" },
+  { icon: Users, label: "Team", active: false, href: "/teams" },
+  { icon: Settings, label: "Settings", active: false, href: "/settings" },
 ]
 
 const projects = [
