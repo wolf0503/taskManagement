@@ -35,8 +35,8 @@ export default function SignInPage() {
     console.log("Sign in:", data)
     setTimeout(() => {
       setIsLoading(false)
-      // Redirect to dashboard after successful sign in
-      window.location.href = "/dashboard"
+      // Redirect to homepage after successful sign in
+      window.location.href = "/"
     }, 1000)
   }
 
