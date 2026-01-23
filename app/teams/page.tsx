@@ -37,9 +37,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
-// Mock team members data
-const teamMembers = [
+// Mock team members data - initial data
+const initialTeamMembers = [
   {
     id: "1",
     name: "Sarah Johnson",
@@ -131,6 +140,16 @@ export default function TeamsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
+  const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
+  const [newMember, setNewMember] = useState({
+    name: "",
+    role: "",
+    email: "",
+    phone: "",
+    location: "",
+    department: "",
+  })
 
   const filteredMembers = teamMembers.filter((member) => {
     const matchesSearch =
@@ -153,6 +172,44 @@ export default function TeamsPage() {
       default:
         return "bg-muted-foreground"
     }
+  }
+
+  const handleAddMember = () => {
+    // Create a new member object with all required fields
+    const currentDate = new Date()
+    const monthYear = currentDate.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    })
+
+    const newMemberData = {
+      id: String(teamMembers.length + 1),
+      name: newMember.name,
+      role: newMember.role,
+      email: newMember.email,
+      phone: newMember.phone || "N/A",
+      location: newMember.location || "Remote",
+      avatar: "/professional-avatar.png",
+      status: "online",
+      projects: [],
+      joinedDate: monthYear,
+      tasksCompleted: 0,
+      department: newMember.department,
+    }
+
+    // Add the new member to the team
+    setTeamMembers([...teamMembers, newMemberData])
+
+    // Reset form and close dialog
+    setIsAddMemberOpen(false)
+    setNewMember({
+      name: "",
+      role: "",
+      email: "",
+      phone: "",
+      location: "",
+      department: "",
+    })
   }
 
   return (
@@ -201,7 +258,10 @@ export default function TeamsPage() {
                   <Download className="h-4 w-4" />
                   Export
                 </Button>
-                <Button className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25">
+                <Button
+                  onClick={() => setIsAddMemberOpen(true)}
+                  className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+                >
                   <UserPlus className="h-4 w-4" />
                   Add Member
                 </Button>
@@ -455,6 +515,101 @@ export default function TeamsPage() {
           )}
         </div>
       </main>
+
+      {/* Add Member Dialog */}
+      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+        <DialogContent className="glass border-glass-border sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Team Member</DialogTitle>
+            <DialogDescription>
+              Fill in the details to add a new member to your team.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                placeholder="John Doe"
+                value={newMember.name}
+                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="john.doe@company.com"
+                value={newMember.email}
+                onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="role">Role *</Label>
+              <Input
+                id="role"
+                placeholder="Senior Developer"
+                value={newMember.role}
+                onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="department">Department *</Label>
+              <Select
+                value={newMember.department}
+                onValueChange={(value) => setNewMember({ ...newMember, department: value })}
+              >
+                <SelectTrigger className="glass-subtle border-glass-border">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent className="glass border-glass-border">
+                  <SelectItem value="Engineering">Engineering</SelectItem>
+                  <SelectItem value="Design">Design</SelectItem>
+                  <SelectItem value="Product">Product</SelectItem>
+                  <SelectItem value="Marketing">Marketing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                placeholder="+1 (555) 123-4567"
+                value={newMember.phone}
+                onChange={(e) => setNewMember({ ...newMember, phone: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                placeholder="San Francisco, CA"
+                value={newMember.location}
+                onChange={(e) => setNewMember({ ...newMember, location: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddMember}
+              disabled={!newMember.name || !newMember.email || !newMember.role || !newMember.department}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
