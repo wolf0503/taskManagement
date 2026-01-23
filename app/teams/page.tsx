@@ -518,7 +518,7 @@ export default function TeamsPage() {
 
       {/* Add Member Dialog */}
       <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-        <DialogContent className="glass border-glass-border sm:max-w-[500px]">
+        <DialogContent className="border-glass-border sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Add New Team Member</DialogTitle>
             <DialogDescription>

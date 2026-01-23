@@ -469,7 +469,7 @@ export default function DashboardPage() {
 
       {/* Create Dashboard Dialog */}
       <Dialog open={createDashboardOpen} onOpenChange={setCreateDashboardOpen}>
-        <DialogContent className="glass border-glass-border sm:max-w-[500px]">
+        <DialogContent className="border-glass-border sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -533,7 +533,7 @@ export default function DashboardPage() {
 
       {/* Edit Dashboard Dialog */}
       <Dialog open={editingProject !== null} onOpenChange={(open) => !open && setEditingProject(null)}>
-        <DialogContent className="glass border-glass-border sm:max-w-[500px]">
+        <DialogContent className="border-glass-border sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
