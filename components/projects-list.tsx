@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText } from "lucide-react"
+import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText, LayoutGrid, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
@@ -40,6 +40,7 @@ export function ProjectsList() {
   const { getTasks } = useTasks()
   const { getColumns } = useColumns()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   // Calculate project stats dynamically from tasks
   const projectsWithStats = useMemo(() => {
@@ -82,18 +83,43 @@ export function ProjectsList() {
             <h1 className="text-3xl font-bold mb-2">Projects</h1>
             <p className="text-muted-foreground">Manage and organize your projects</p>
           </div>
-          <Button
-            onClick={handleCreateProject}
-            className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-          >
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* View Mode Buttons */}
+            <div className="flex items-center gap-1 p-1 glass-subtle rounded-lg border border-glass-border mr-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", viewMode === "grid" && "bg-primary/20 text-primary")}
+                onClick={() => setViewMode("grid")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", viewMode === "list" && "bg-primary/20 text-primary")}
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              onClick={handleCreateProject}
+              className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+            >
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Projects Grid or List */}
+      <div className={cn(
+        viewMode === "grid" 
+          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          : "space-y-4"
+      )}>
         {projectsWithStats.map((project) => {
           const statusInfo = statusConfig[project.status]
           const StatusIcon = statusInfo.icon
@@ -101,7 +127,7 @@ export function ProjectsList() {
             ? Math.round((project.completedTasks || 0) / project.taskCount * 100)
             : 0
 
-          return (
+          return viewMode === "grid" ? (
             <div
               key={project.id}
               onClick={() => handleProjectClick(project.id)}
@@ -191,6 +217,60 @@ export function ProjectsList() {
                   <span className="text-xs text-muted-foreground ml-2">
                     {project.teamMembers.length} {project.teamMembers.length === 1 ? "member" : "members"}
                   </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // List View
+            <div
+              key={project.id}
+              onClick={() => handleProjectClick(project.id)}
+              className="glass rounded-xl p-4 cursor-pointer transition-all hover:border-primary/50 group"
+            >
+              <div className="flex items-center gap-4">
+                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", project.color)}>
+                  <FolderKanban className="h-6 w-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-lg truncate group-hover:text-primary transition-colors">
+                      {project.name}
+                    </h3>
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusConfig[project.status].className)}>
+                      {statusConfig[project.status].label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {project.description}
+                  </p>
+                </div>
+                <div className="flex items-center gap-6 flex-shrink-0">
+                  <div className="text-center">
+                    <div className="text-sm font-medium">{project.taskCount}</div>
+                    <div className="text-xs text-muted-foreground">Tasks</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-medium">{progress}%</div>
+                    <div className="text-xs text-muted-foreground">Complete</div>
+                  </div>
+                  <div className="flex -space-x-2">
+                    {project.teamMembers.slice(0, 3).map((member) => (
+                      <Avatar
+                        key={member.name}
+                        className="h-7 w-7 ring-2 ring-background"
+                      >
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                        <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                          {member.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {project.teamMembers.length > 3 && (
+                      <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
+                        +{project.teamMembers.length - 3}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

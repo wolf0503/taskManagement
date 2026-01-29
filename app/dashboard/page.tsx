@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
@@ -47,8 +47,38 @@ import {
   Share2
 } from "lucide-react"
 
+// Dashboard project type
+interface DashboardProject {
+  id: string
+  name: string
+  color: string
+  completionRate: number
+  tasksCompleted: number
+  totalTasks: number
+  activeMembers: number
+  trend: string
+  trendUp: boolean
+  lastActivity: string
+  description?: string
+  stats: {
+    todo: number
+    inProgress: number
+    done: number
+    velocity: string
+    timeSpent: string
+    estimatedTime: string
+    blockers: number
+  }
+  recentComments: Array<{
+    user: string
+    avatar: string
+    text: string
+    time: string
+  }>
+}
+
 // Mock project statistics
-const projectStats = [
+const projectStats: DashboardProject[] = [
   {
     id: "1",
     name: "Website Redesign",
@@ -177,6 +207,18 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<string | null>(null)
+  const [projects, setProjects] = useState(() => {
+    // Load from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dashboardProjects')
+      return saved ? JSON.parse(saved) : projectStats
+    }
+    return projectStats
+  })
+  const [newDashboardName, setNewDashboardName] = useState("")
+  const [newDashboardDescription, setNewDashboardDescription] = useState("")
+  const [editDashboardName, setEditDashboardName] = useState("")
+  const [editDashboardDescription, setEditDashboardDescription] = useState("")
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({})
   const [projectComments, setProjectComments] = useState<Record<string, any[]>>(
     projectStats.reduce((acc, project) => ({
@@ -184,6 +226,13 @@ export default function DashboardPage() {
       [project.id]: project.recentComments
     }), {})
   )
+
+  // Save to localStorage whenever projects change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboardProjects', JSON.stringify(projects))
+    }
+  }, [projects])
 
   const handlePostComment = (projectId: string) => {
     const commentText = commentTexts[projectId]?.trim()
@@ -207,11 +256,115 @@ export default function DashboardPage() {
     }))
   }
 
+  const handleCreateDashboard = () => {
+    if (!newDashboardName.trim()) return
+
+    const colors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
+    const newDashboard = {
+      id: String(projects.length + 1),
+      name: newDashboardName,
+      description: newDashboardDescription,
+      color: colors[projects.length % colors.length],
+      completionRate: 0,
+      tasksCompleted: 0,
+      totalTasks: 0,
+      activeMembers: 1,
+      trend: "0%",
+      trendUp: true,
+      lastActivity: "Just now",
+      stats: {
+        todo: 0,
+        inProgress: 0,
+        done: 0,
+        velocity: "0 tasks/week",
+        timeSpent: "0h",
+        estimatedTime: "0h",
+        blockers: 0,
+      },
+      recentComments: []
+    }
+
+    setProjects([...projects, newDashboard])
+    setNewDashboardName("")
+    setNewDashboardDescription("")
+    setCreateDashboardOpen(false)
+  }
+
+  const handleDuplicateDashboard = (projectId: string) => {
+    const projectToDuplicate = projects.find((p: DashboardProject) => p.id === projectId)
+    if (!projectToDuplicate) return
+
+    const newDashboard = {
+      ...projectToDuplicate,
+      id: String(projects.length + 1),
+      name: `${projectToDuplicate.name} (Copy)`,
+      lastActivity: "Just now"
+    }
+
+    setProjects([...projects, newDashboard])
+  }
+
+  const handleDeleteDashboard = (projectId: string) => {
+    setProjects(projects.filter((p: DashboardProject) => p.id !== projectId))
+  }
+
+  const handleShareDashboard = (projectId: string) => {
+    const project = projects.find((p: DashboardProject) => p.id === projectId)
+    if (!project) return
+    
+    const shareUrl = `${window.location.origin}/dashboard/${projectId}`
+    navigator.clipboard.writeText(shareUrl)
+    alert(`Link copied to clipboard: ${shareUrl}`)
+  }
+
+  const handleExportData = (projectId: string) => {
+    const project = projects.find((p: DashboardProject) => p.id === projectId)
+    if (!project) return
+
+    const dataStr = JSON.stringify(project, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-dashboard.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleEditDashboard = () => {
+    if (!editingProject || !editDashboardName.trim()) return
+
+    setProjects(projects.map((p: DashboardProject) => 
+      p.id === editingProject 
+        ? { 
+            ...p, 
+            name: editDashboardName,
+            description: editDashboardDescription 
+          }
+        : p
+    ))
+    
+    setEditingProject(null)
+    setEditDashboardName("")
+    setEditDashboardDescription("")
+  }
+
+  const openEditDialog = (projectId: string) => {
+    const project = projects.find((p: DashboardProject) => p.id === projectId)
+    if (project) {
+      setEditDashboardName(project.name)
+      setEditDashboardDescription((project as any).description || `Dashboard for ${project.name}`)
+      setEditingProject(projectId)
+    }
+  }
+
   // Overall statistics
   const overallStats = [
     {
       title: "Total Projects",
-      value: "5",
+      value: String(projects.length),
       icon: FolderKanban,
       trend: "+2 this month",
       color: "text-chart-1",
@@ -243,9 +396,9 @@ export default function DashboardPage() {
     },
   ]
 
-  const totalTasks = projectStats.reduce((sum, p) => sum + p.totalTasks, 0)
-  const completedTasks = projectStats.reduce((sum, p) => sum + p.tasksCompleted, 0)
-  const overallCompletion = Math.round((completedTasks / totalTasks) * 100)
+  const totalTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.totalTasks, 0)
+  const completedTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.tasksCompleted, 0)
+  const overallCompletion = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
   return (
     <div className="min-h-screen animated-gradient-bg flex">
@@ -357,7 +510,7 @@ export default function DashboardPage() {
 
             {/* Dashboards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {projectStats.map((project) => (
+                {projects.map((project: DashboardProject) => (
                   <Card 
                     key={project.id} 
                     className="glass border-glass-border hover:border-primary/50 transition-all group cursor-pointer"
@@ -389,24 +542,24 @@ export default function DashboardPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass border-glass-border w-48">
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project.id); }}>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project.id); }}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit Dashboard
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateDashboard(project.id); }}>
                               <Copy className="h-4 w-4 mr-2" />
                               Duplicate
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareDashboard(project.id); }}>
                               <Share2 className="h-4 w-4 mr-2" />
                               Share
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExportData(project.id); }}>
                               <Download className="h-4 w-4 mr-2" />
                               Export Data
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteDashboard(project.id); }}>
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete Dashboard
                             </DropdownMenuItem>
@@ -488,6 +641,8 @@ export default function DashboardPage() {
                 id="dashboard-name"
                 placeholder="e.g., Q1 Analytics, Team Performance"
                 className="glass-subtle border-glass-border"
+                value={newDashboardName}
+                onChange={(e) => setNewDashboardName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -496,12 +651,14 @@ export default function DashboardPage() {
                 id="dashboard-description"
                 placeholder="Describe the purpose of this dashboard..."
                 className="glass-subtle border-glass-border min-h-[100px]"
+                value={newDashboardDescription}
+                onChange={(e) => setNewDashboardDescription(e.target.value)}
               />
             </div>
             <div className="space-y-2">
               <Label>Select Projects</Label>
               <div className="space-y-2">
-                {projectStats.map((project) => (
+                {projects.map((project: DashboardProject) => (
                   <label
                     key={project.id}
                     className="flex items-center gap-3 p-3 rounded-lg glass-subtle cursor-pointer hover:bg-primary/5 transition-colors"
@@ -520,10 +677,10 @@ export default function DashboardPage() {
             <Button variant="ghost" onClick={() => setCreateDashboardOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              // TODO: Implement dashboard creation
-              setCreateDashboardOpen(false)
-            }}>
+            <Button 
+              onClick={handleCreateDashboard}
+              disabled={!newDashboardName.trim()}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create Dashboard
             </Button>
@@ -546,13 +703,14 @@ export default function DashboardPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {editingProject && projectStats.find(p => p.id === editingProject) && (
+            {editingProject && projects.find((p: DashboardProject) => p.id === editingProject) && (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="edit-dashboard-name">Dashboard Name</Label>
                   <Input
                     id="edit-dashboard-name"
-                    defaultValue={projectStats.find(p => p.id === editingProject)?.name}
+                    value={editDashboardName}
+                    onChange={(e) => setEditDashboardName(e.target.value)}
                     className="glass-subtle border-glass-border"
                   />
                 </div>
@@ -560,7 +718,8 @@ export default function DashboardPage() {
                   <Label htmlFor="edit-dashboard-description">Description</Label>
                   <Textarea
                     id="edit-dashboard-description"
-                    defaultValue={`Dashboard for ${projectStats.find(p => p.id === editingProject)?.name}`}
+                    value={editDashboardDescription}
+                    onChange={(e) => setEditDashboardDescription(e.target.value)}
                     className="glass-subtle border-glass-border min-h-[100px]"
                   />
                 </div>
@@ -597,10 +756,10 @@ export default function DashboardPage() {
             <Button variant="ghost" onClick={() => setEditingProject(null)}>
               Cancel
             </Button>
-            <Button onClick={() => {
-              // TODO: Implement dashboard update
-              setEditingProject(null)
-            }}>
+            <Button 
+              onClick={handleEditDashboard}
+              disabled={!editDashboardName.trim()}
+            >
               <Edit className="h-4 w-4 mr-2" />
               Save Changes
             </Button>

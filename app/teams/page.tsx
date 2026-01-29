@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,8 +47,24 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
+// Team member type
+interface TeamMember {
+  id: string
+  name: string
+  role: string
+  email: string
+  phone: string
+  location: string
+  avatar: string
+  status: string
+  projects: string[]
+  joinedDate: string
+  tasksCompleted: number
+  department: string
+}
+
 // Mock team members data - initial data
-const initialTeamMembers = [
+const initialTeamMembers: TeamMember[] = [
   {
     id: "1",
     name: "Sarah Johnson",
@@ -141,7 +157,14 @@ export default function TeamsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
-  const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
+  const [teamMembers, setTeamMembers] = useState(() => {
+    // Load from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('teamMembers')
+      return saved ? JSON.parse(saved) : initialTeamMembers
+    }
+    return initialTeamMembers
+  })
   const [newMember, setNewMember] = useState({
     name: "",
     role: "",
@@ -151,7 +174,14 @@ export default function TeamsPage() {
     department: "",
   })
 
-  const filteredMembers = teamMembers.filter((member) => {
+  // Save to localStorage whenever teamMembers change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('teamMembers', JSON.stringify(teamMembers))
+    }
+  }, [teamMembers])
+
+  const filteredMembers = teamMembers.filter((member: TeamMember) => {
     const matchesSearch =
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -210,6 +240,40 @@ export default function TeamsPage() {
       location: "",
       department: "",
     })
+  }
+
+  const handleViewProfile = (memberId: string) => {
+    const member = teamMembers.find(m => m.id === memberId)
+    if (member) {
+      alert(`Profile: ${member.name}\nRole: ${member.role}\nEmail: ${member.email}\nPhone: ${member.phone}\nLocation: ${member.location}\nDepartment: ${member.department}\nJoined: ${member.joinedDate}\nTasks Completed: ${member.tasksCompleted}`)
+    }
+  }
+
+  const handleSendMessage = (memberId: string) => {
+    const member = teamMembers.find(m => m.id === memberId)
+    if (member) {
+      window.location.href = `mailto:${member.email}?subject=Message from Team`
+    }
+  }
+
+  const handleAssignTask = (memberId: string) => {
+    const member = teamMembers.find(m => m.id === memberId)
+    if (member) {
+      alert(`Assign task to ${member.name}\n\nThis feature will open a task assignment dialog.`)
+    }
+  }
+
+  const handleEditMember = (memberId: string) => {
+    const member = teamMembers.find(m => m.id === memberId)
+    if (member) {
+      alert(`Edit member: ${member.name}\n\nThis feature will open an edit dialog to modify member details.`)
+    }
+  }
+
+  const handleDeleteMember = (memberId: string) => {
+    if (confirm('Are you sure you want to remove this team member?')) {
+      setTeamMembers(teamMembers.filter((m: TeamMember) => m.id !== memberId))
+    }
   }
 
   return (
@@ -336,7 +400,7 @@ export default function TeamsPage() {
                             <AvatarFallback className="bg-primary/20 text-primary">
                               {member.name
                                 .split(" ")
-                                .map((n) => n[0])
+                                .map((n: string) => n[0])
                                 .join("")}
                             </AvatarFallback>
                           </Avatar>
@@ -359,11 +423,17 @@ export default function TeamsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="glass border-glass-border">
-                          <DropdownMenuItem>View Profile</DropdownMenuItem>
-                          <DropdownMenuItem>Send Message</DropdownMenuItem>
-                          <DropdownMenuItem>Assign Task</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewProfile(member.id)}>View Profile</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleSendMessage(member.id)}>Send Message</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAssignTask(member.id)}>Assign Task</DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem>Edit Member</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEditMember(member.id)}>Edit Member</DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDeleteMember(member.id)}
+                          >
+                            Remove Member
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -437,7 +507,7 @@ export default function TeamsPage() {
                           <AvatarFallback className="bg-primary/20 text-primary">
                             {member.name
                               .split(" ")
-                              .map((n) => n[0])
+                              .map((n: string) => n[0])
                               .join("")}
                           </AvatarFallback>
                         </Avatar>
@@ -487,11 +557,17 @@ export default function TeamsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass border-glass-border">
-                            <DropdownMenuItem>View Profile</DropdownMenuItem>
-                            <DropdownMenuItem>Send Message</DropdownMenuItem>
-                            <DropdownMenuItem>Assign Task</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewProfile(member.id)}>View Profile</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSendMessage(member.id)}>Send Message</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleAssignTask(member.id)}>Assign Task</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>Edit Member</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditMember(member.id)}>Edit Member</DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDeleteMember(member.id)}
+                            >
+                              Remove Member
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

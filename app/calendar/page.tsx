@@ -1,12 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -29,8 +47,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-// Mock calendar events
-const events = [
+// Event type definition
+interface CalendarEvent {
+  id: string
+  title: string
+  type: string
+  date: string
+  time: string
+  duration: string
+  attendees: string[]
+  location: string
+  color: string
+  project: string
+}
+
+// Mock calendar events - initial data
+const initialEvents: CalendarEvent[] = [
   {
     id: "1",
     title: "Team Standup",
@@ -141,6 +173,29 @@ export default function CalendarPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [events, setEvents] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('calendarEvents')
+      return saved ? JSON.parse(saved) : initialEvents
+    }
+    return initialEvents
+  })
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [newEvent, setNewEvent] = useState({
+    title: "",
+    type: "meeting",
+    date: "",
+    time: "",
+    duration: "",
+    location: "",
+    project: "",
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calendarEvents', JSON.stringify(events))
+    }
+  }, [events])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -191,11 +246,11 @@ export default function CalendarPage() {
 
   const getEventsForDate = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    return events.filter((event) => event.date === dateStr)
+    return events.filter((event: CalendarEvent) => event.date === dateStr)
   }
 
   const selectedDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`
-  const selectedDateEvents = events.filter((event) => event.date === selectedDateStr)
+  const selectedDateEvents = events.filter((event: CalendarEvent) => event.date === selectedDateStr)
 
   const getEventIcon = (type: string) => {
     switch (type) {
@@ -207,6 +262,54 @@ export default function CalendarPage() {
         return ListTodo
       default:
         return CalendarIcon
+    }
+  }
+
+  const handleCreateEvent = () => {
+    if (!newEvent.title || !newEvent.date) return
+
+    const colors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-primary", "bg-accent"]
+    const newEventData = {
+      id: String(events.length + 1),
+      title: newEvent.title,
+      type: newEvent.type,
+      date: newEvent.date,
+      time: newEvent.time || "09:00 AM",
+      duration: newEvent.duration || "1 hour",
+      attendees: [],
+      location: newEvent.location || "",
+      color: colors[events.length % colors.length],
+      project: newEvent.project || "General",
+    }
+
+    setEvents([...events, newEventData])
+    setIsCreateDialogOpen(false)
+    setNewEvent({
+      title: "",
+      type: "meeting",
+      date: "",
+      time: "",
+      duration: "",
+      location: "",
+      project: "",
+    })
+  }
+
+  const handleDeleteEvent = (eventId: string) => {
+    if (confirm('Are you sure you want to delete this event?')) {
+      setEvents(events.filter((e: CalendarEvent) => e.id !== eventId))
+    }
+  }
+
+  const handleDuplicateEvent = (eventId: string) => {
+    const event = events.find((e: CalendarEvent) => e.id === eventId)
+    if (event) {
+      const duplicated = {
+        ...event,
+        id: String(events.length + 1),
+        title: `${event.title} (Copy)`,
+      }
+      setEvents([...events, duplicated])
     }
   }
 
@@ -251,7 +354,10 @@ export default function CalendarPage() {
                   </p>
                 </div>
               </div>
-              <Button className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25">
+              <Button 
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+              >
                 <Plus className="h-4 w-4" />
                 Create Event
               </Button>
@@ -334,7 +440,7 @@ export default function CalendarPage() {
                           <div className="font-medium">{day}</div>
                           {dayEvents.length > 0 && (
                             <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                              {dayEvents.slice(0, 3).map((event, idx) => (
+                              {dayEvents.slice(0, 3).map((event: CalendarEvent, idx: number) => (
                                 <div
                                   key={idx}
                                   className={cn("h-1 w-1 rounded-full", event.color)}
@@ -369,7 +475,7 @@ export default function CalendarPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 max-h-[600px] overflow-y-auto">
                   {selectedDateEvents.length > 0 ? (
-                    selectedDateEvents.map((event) => {
+                    selectedDateEvents.map((event: CalendarEvent) => {
                       const EventIcon = getEventIcon(event.type)
                       return (
                         <Card
@@ -396,11 +502,20 @@ export default function CalendarPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="glass border-glass-border">
-                                  <DropdownMenuItem>View Details</DropdownMenuItem>
-                                  <DropdownMenuItem>Edit Event</DropdownMenuItem>
-                                  <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => alert(`Event: ${event.title}\nDate: ${event.date}\nTime: ${event.time}`)}>
+                                    View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => alert('Edit feature coming soon')}>
+                                    Edit Event
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDuplicateEvent(event.id)}>
+                                    Duplicate
+                                  </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-destructive">
+                                  <DropdownMenuItem 
+                                    className="text-destructive"
+                                    onClick={() => handleDeleteEvent(event.id)}
+                                  >
                                     Delete Event
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -432,12 +547,12 @@ export default function CalendarPage() {
                                 <div className="flex items-center gap-2 mt-2">
                                   <Users className="h-3 w-3" />
                                   <div className="flex -space-x-2">
-                                    {event.attendees.slice(0, 3).map((attendee, idx) => (
+                                    {event.attendees.slice(0, 3).map((attendee: string, idx: number) => (
                                       <Avatar key={idx} className="h-6 w-6 ring-2 ring-background">
                                         <AvatarFallback className="bg-primary/20 text-primary text-xs">
                                           {attendee
                                             .split(" ")
-                                            .map((n) => n[0])
+                                            .map((n: string) => n[0])
                                             .join("")}
                                         </AvatarFallback>
                                       </Avatar>
@@ -461,7 +576,15 @@ export default function CalendarPage() {
                       <p className="text-sm text-muted-foreground">
                         No events scheduled for this day
                       </p>
-                      <Button variant="outline" size="sm" className="mt-3 gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-3 gap-2"
+                        onClick={() => {
+                          setNewEvent({...newEvent, date: selectedDateStr})
+                          setIsCreateDialogOpen(true)
+                        }}
+                      >
                         <Plus className="h-3 w-3" />
                         Add Event
                       </Button>
@@ -481,8 +604,8 @@ export default function CalendarPage() {
             <CardContent>
               <div className="space-y-3">
                 {events
-                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                  .map((event) => {
+                  .sort((a: CalendarEvent, b: CalendarEvent) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                  .map((event: CalendarEvent) => {
                     const EventIcon = getEventIcon(event.type)
                     const eventDate = new Date(event.date)
                     return (
@@ -527,11 +650,20 @@ export default function CalendarPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass border-glass-border">
-                            <DropdownMenuItem>View Details</DropdownMenuItem>
-                            <DropdownMenuItem>Edit Event</DropdownMenuItem>
-                            <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => alert(`Event: ${event.title}\nDate: ${event.date}\nTime: ${event.time}`)}>
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => alert('Edit feature coming soon')}>
+                              Edit Event
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicateEvent(event.id)}>
+                              Duplicate
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive">
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteEvent(event.id)}
+                            >
                               Delete Event
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -544,6 +676,111 @@ export default function CalendarPage() {
           </Card>
         </div>
       </main>
+
+      {/* Create Event Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="border-glass-border sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Create New Event</DialogTitle>
+            <DialogDescription>
+              Add a new event to your calendar
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="event-title">Event Title *</Label>
+              <Input
+                id="event-title"
+                placeholder="Team Meeting"
+                value={newEvent.title}
+                onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="event-type">Event Type</Label>
+              <Select
+                value={newEvent.type}
+                onValueChange={(value) => setNewEvent({ ...newEvent, type: value })}
+              >
+                <SelectTrigger className="glass-subtle border-glass-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass border-glass-border">
+                  <SelectItem value="meeting">Meeting</SelectItem>
+                  <SelectItem value="deadline">Deadline</SelectItem>
+                  <SelectItem value="task">Task</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="event-date">Date *</Label>
+                <Input
+                  id="event-date"
+                  type="date"
+                  value={newEvent.date}
+                  onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
+                  className="glass-subtle border-glass-border"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="event-time">Time</Label>
+                <Input
+                  id="event-time"
+                  placeholder="09:00 AM"
+                  value={newEvent.time}
+                  onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })}
+                  className="glass-subtle border-glass-border"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="event-duration">Duration</Label>
+              <Input
+                id="event-duration"
+                placeholder="1 hour"
+                value={newEvent.duration}
+                onChange={(e) => setNewEvent({ ...newEvent, duration: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="event-location">Location</Label>
+              <Input
+                id="event-location"
+                placeholder="Zoom, Conference Room A, etc."
+                value={newEvent.location}
+                onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="event-project">Project</Label>
+              <Input
+                id="event-project"
+                placeholder="Project name"
+                value={newEvent.project}
+                onChange={(e) => setNewEvent({ ...newEvent, project: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateEvent}
+              disabled={!newEvent.title || !newEvent.date}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
