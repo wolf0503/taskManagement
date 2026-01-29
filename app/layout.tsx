@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { AuthProvider } from "@/contexts/auth-context"
 import { ProjectsProvider } from "@/contexts/projects-context"
 import { TasksProvider } from "@/contexts/tasks-context"
 import { ColumnsProvider } from "@/contexts/columns-context"
@@ -42,15 +43,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased`}>
-        <ProjectsProvider>
-          <TasksProvider>
-            <ColumnsProvider>
-              <FiltersProvider>
-                {children}
-              </FiltersProvider>
-            </ColumnsProvider>
-          </TasksProvider>
-        </ProjectsProvider>
+        <AuthProvider>
+          <ProjectsProvider>
+            <TasksProvider>
+              <ColumnsProvider>
+                <FiltersProvider>
+                  {children}
+                </FiltersProvider>
+              </ColumnsProvider>
+            </TasksProvider>
+          </ProjectsProvider>
+        </AuthProvider>
         <Toaster />
         <Analytics />
       </body>

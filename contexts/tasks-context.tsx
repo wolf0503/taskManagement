@@ -1,193 +1,298 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react"
+import { tasksService, CreateTaskData, UpdateTaskData, MoveTaskData } from "@/services/tasks.service"
+import { websocketService } from "@/services/websocket.service"
 import type { Task } from "@/lib/types"
-
-// Default tasks data for initial projects
-const defaultTasksByProject: Record<string, Task[]> = {
-  "1": [
-    {
-      id: "1",
-      title: "Design system documentation",
-      description: "Create comprehensive docs for the design system components",
-      columnId: "todo",
-      priority: "high",
-      tags: ["Design", "Documentation"],
-      assignee: { name: "Alice", avatar: "/professional-woman.png" },
-      dueDate: "Jan 20",
-      comments: 5,
-      attachments: 2,
-    },
-    {
-      id: "2",
-      title: "Implement dark mode",
-      description: "Add dark mode support across all components",
-      columnId: "todo",
-      priority: "medium",
-      tags: ["Development", "UI"],
-      assignee: { name: "Bob", avatar: "/professional-man.png" },
-      dueDate: "Jan 22",
-      comments: 3,
-      attachments: 0,
-    },
-    {
-      id: "3",
-      title: "API integration",
-      description: "Connect frontend with the new REST API endpoints",
-      columnId: "in-progress",
-      priority: "high",
-      tags: ["Backend", "API"],
-      assignee: { name: "Carol", avatar: "/woman-developer.png" },
-      dueDate: "Jan 18",
-      comments: 8,
-      attachments: 4,
-    },
-    {
-      id: "4",
-      title: "User authentication flow",
-      description: "Implement OAuth and email/password authentication",
-      columnId: "in-progress",
-      priority: "high",
-      tags: ["Security", "Auth"],
-      assignee: { name: "David", avatar: "/man-designer.png" },
-      dueDate: "Jan 19",
-      comments: 12,
-      attachments: 1,
-    },
-    {
-      id: "5",
-      title: "Performance optimization",
-      description: "Optimize bundle size and improve Core Web Vitals",
-      columnId: "review",
-      priority: "medium",
-      tags: ["Performance", "Development"],
-      assignee: { name: "Alice", avatar: "/professional-woman.png" },
-      dueDate: "Jan 21",
-      comments: 6,
-      attachments: 3,
-    },
-    {
-      id: "6",
-      title: "Mobile responsive design",
-      description: "Ensure all pages work flawlessly on mobile devices",
-      columnId: "review",
-      priority: "low",
-      tags: ["Design", "Mobile"],
-      assignee: { name: "Bob", avatar: "/professional-man.png" },
-      dueDate: "Jan 23",
-      comments: 2,
-      attachments: 5,
-    },
-    {
-      id: "7",
-      title: "Setup CI/CD pipeline",
-      description: "Configure automated testing and deployment workflows",
-      columnId: "done",
-      priority: "high",
-      tags: ["DevOps", "Infrastructure"],
-      assignee: { name: "Carol", avatar: "/woman-developer.png" },
-      dueDate: "Jan 15",
-      comments: 10,
-      attachments: 2,
-    },
-    {
-      id: "8",
-      title: "Logo redesign",
-      description: "Create new brand logo variations for different contexts",
-      columnId: "done",
-      priority: "medium",
-      tags: ["Design", "Branding"],
-      assignee: { name: "David", avatar: "/man-designer.png" },
-      dueDate: "Jan 14",
-      comments: 15,
-      attachments: 8,
-    },
-  ],
-}
+import { ApiError } from "@/lib/api-client"
 
 interface TasksContextType {
+  tasksByProject: Record<string, Task[]>
+  isLoading: boolean
+  error: string | null
   getTasks: (projectId: string) => Task[]
-  addTask: (projectId: string, task: Omit<Task, "id">) => void
-  updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => void
-  deleteTask: (projectId: string, taskId: string) => void
-  moveTask: (projectId: string, taskId: string, newColumnId: string) => void
+  loadProjectTasks: (projectId: string) => Promise<void>
+  addTask: (projectId: string, task: CreateTaskData) => Promise<Task>
+  updateTask: (taskId: string, updates: UpdateTaskData) => Promise<void>
+  deleteTask: (taskId: string) => Promise<void>
+  moveTask: (taskId: string, data: MoveTaskData) => Promise<void>
+  completeTask: (taskId: string) => Promise<void>
+  uncompleteTask: (taskId: string) => Promise<void>
+  clearError: () => void
 }
 
 const TasksContext = createContext<TasksContextType | undefined>(undefined)
 
-const STORAGE_KEY = "taskManagement_tasks"
-
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasksByProject, setTasksByProject] = useState<Record<string, Task[]>>({})
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Load tasks from localStorage on mount
+  // Setup WebSocket listeners for real-time updates
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored)
-          setTasksByProject(parsed)
-        } catch (error) {
-          console.error("Failed to parse stored tasks:", error)
-          setTasksByProject(defaultTasksByProject)
-        }
-      } else {
-        setTasksByProject(defaultTasksByProject)
-      }
+    // Task created
+    websocketService.onTaskCreated((data) => {
+      setTasksByProject((prev) => ({
+        ...prev,
+        [data.projectId]: [...(prev[data.projectId] || []), data.task],
+      }))
+    })
+
+    // Task updated
+    websocketService.onTaskUpdated((data) => {
+      setTasksByProject((prev) => ({
+        ...prev,
+        [data.projectId]: (prev[data.projectId] || []).map((task) =>
+          task.id === data.taskId ? { ...task, ...data.updates } : task
+        ),
+      }))
+    })
+
+    // Task deleted
+    websocketService.onTaskDeleted((data) => {
+      setTasksByProject((prev) => ({
+        ...prev,
+        [data.projectId]: (prev[data.projectId] || []).filter(
+          (task) => task.id !== data.taskId
+        ),
+      }))
+    })
+
+    // Task moved
+    websocketService.onTaskMoved((data) => {
+      setTasksByProject((prev) => ({
+        ...prev,
+        [data.projectId]: (prev[data.projectId] || []).map((task) =>
+          task.id === data.taskId
+            ? { ...task, columnId: data.columnId, position: data.position }
+            : task
+        ),
+      }))
+    })
+
+    return () => {
+      websocketService.off('task:created')
+      websocketService.off('task:updated')
+      websocketService.off('task:deleted')
+      websocketService.off('task:moved')
     }
   }, [])
 
-  // Save tasks to localStorage whenever they change
-  useEffect(() => {
-    if (typeof window !== "undefined" && Object.keys(tasksByProject).length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByProject))
+  const loadProjectTasks = useCallback(async (projectId: string) => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { tasks } = await tasksService.getProjectTasks(projectId, { limit: 1000 })
+      setTasksByProject((prev) => ({
+        ...prev,
+        [projectId]: tasks,
+      }))
+      
+      // Join project room for real-time updates
+      websocketService.joinProject(projectId)
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to load tasks'
+      setError(errorMessage)
+      console.error('Failed to load tasks:', err)
+    } finally {
+      setIsLoading(false)
     }
-  }, [tasksByProject])
+  }, [])
 
   const getTasks = (projectId: string): Task[] => {
     return tasksByProject[projectId] || []
   }
 
-  const addTask = (projectId: string, taskData: Omit<Task, "id">) => {
-    const newTask: Task = {
-      ...taskData,
-      id: `${projectId}-${Date.now()}`, // Unique ID based on project and timestamp
+  const addTask = async (projectId: string, taskData: CreateTaskData): Promise<Task> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const newTask = await tasksService.createTask(projectId, taskData)
+      
+      // Optimistic update (will be confirmed by WebSocket event)
+      setTasksByProject((prev) => ({
+        ...prev,
+        [projectId]: [...(prev[projectId] || []), newTask],
+      }))
+      
+      return newTask
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to create task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
     }
-    setTasksByProject((prev) => ({
-      ...prev,
-      [projectId]: [...(prev[projectId] || []), newTask],
-    }))
   }
 
-  const updateTask = (projectId: string, taskId: string, updates: Partial<Task>) => {
-    setTasksByProject((prev) => ({
-      ...prev,
-      [projectId]: (prev[projectId] || []).map((task) =>
-        task.id === taskId ? { ...task, ...updates } : task
-      ),
-    }))
+  const updateTask = async (taskId: string, updates: UpdateTaskData): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const updatedTask = await tasksService.updateTask(taskId, updates)
+      
+      // Optimistic update
+      setTasksByProject((prev) => {
+        const newState = { ...prev }
+        for (const projectId in newState) {
+          newState[projectId] = newState[projectId].map((task) =>
+            task.id === taskId ? { ...task, ...updatedTask } : task
+          )
+        }
+        return newState
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to update task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const deleteTask = (projectId: string, taskId: string) => {
-    setTasksByProject((prev) => ({
-      ...prev,
-      [projectId]: (prev[projectId] || []).filter((task) => task.id !== taskId),
-    }))
+  const deleteTask = async (taskId: string): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await tasksService.deleteTask(taskId)
+      
+      // Optimistic update
+      setTasksByProject((prev) => {
+        const newState = { ...prev }
+        for (const projectId in newState) {
+          newState[projectId] = newState[projectId].filter(
+            (task) => task.id !== taskId
+          )
+        }
+        return newState
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to delete task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const moveTask = (projectId: string, taskId: string, newColumnId: string) => {
-    setTasksByProject((prev) => ({
-      ...prev,
-      [projectId]: (prev[projectId] || []).map((task) =>
-        task.id === taskId ? { ...task, columnId: newColumnId } : task
-      ),
-    }))
+  const moveTask = async (taskId: string, data: MoveTaskData): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await tasksService.moveTask(taskId, data)
+      
+      // Optimistic update
+      setTasksByProject((prev) => {
+        const newState = { ...prev }
+        for (const projectId in newState) {
+          newState[projectId] = newState[projectId].map((task) =>
+            task.id === taskId
+              ? { ...task, columnId: data.columnId, position: data.position }
+              : task
+          )
+        }
+        return newState
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to move task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const completeTask = async (taskId: string): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const updatedTask = await tasksService.completeTask(taskId)
+      
+      // Optimistic update
+      setTasksByProject((prev) => {
+        const newState = { ...prev }
+        for (const projectId in newState) {
+          newState[projectId] = newState[projectId].map((task) =>
+            task.id === taskId ? { ...task, ...updatedTask } : task
+          )
+        }
+        return newState
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to complete task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const uncompleteTask = async (taskId: string): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const updatedTask = await tasksService.uncompleteTask(taskId)
+      
+      // Optimistic update
+      setTasksByProject((prev) => {
+        const newState = { ...prev }
+        for (const projectId in newState) {
+          newState[projectId] = newState[projectId].map((task) =>
+            task.id === taskId ? { ...task, ...updatedTask } : task
+          )
+        }
+        return newState
+      })
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to uncomplete task'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const clearError = () => {
+    setError(null)
   }
 
   return (
     <TasksContext.Provider
-      value={{ getTasks, addTask, updateTask, deleteTask, moveTask }}
+      value={{
+        tasksByProject,
+        isLoading,
+        error,
+        getTasks,
+        loadProjectTasks,
+        addTask,
+        updateTask,
+        deleteTask,
+        moveTask,
+        completeTask,
+        uncompleteTask,
+        clearError,
+      }}
     >
       {children}
     </TasksContext.Provider>
