@@ -95,7 +95,7 @@ export function AddTaskDialog({
   })
 
   const { fields, append, remove } = useFieldArray({
-    control: form.control,
+    control: form.control as any,
     name: "tags",
   })
 

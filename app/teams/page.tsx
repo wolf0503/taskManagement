@@ -243,28 +243,28 @@ export default function TeamsPage() {
   }
 
   const handleViewProfile = (memberId: string) => {
-    const member = teamMembers.find(m => m.id === memberId)
+    const member = teamMembers.find((m: TeamMember) => m.id === memberId)
     if (member) {
       alert(`Profile: ${member.name}\nRole: ${member.role}\nEmail: ${member.email}\nPhone: ${member.phone}\nLocation: ${member.location}\nDepartment: ${member.department}\nJoined: ${member.joinedDate}\nTasks Completed: ${member.tasksCompleted}`)
     }
   }
 
   const handleSendMessage = (memberId: string) => {
-    const member = teamMembers.find(m => m.id === memberId)
+    const member = teamMembers.find((m: TeamMember) => m.id === memberId)
     if (member) {
       window.location.href = `mailto:${member.email}?subject=Message from Team`
     }
   }
 
   const handleAssignTask = (memberId: string) => {
-    const member = teamMembers.find(m => m.id === memberId)
+    const member = teamMembers.find((m: TeamMember) => m.id === memberId)
     if (member) {
       alert(`Assign task to ${member.name}\n\nThis feature will open a task assignment dialog.`)
     }
   }
 
   const handleEditMember = (memberId: string) => {
-    const member = teamMembers.find(m => m.id === memberId)
+    const member = teamMembers.find((m: TeamMember) => m.id === memberId)
     if (member) {
       alert(`Edit member: ${member.name}\n\nThis feature will open an edit dialog to modify member details.`)
     }
@@ -386,7 +386,7 @@ export default function TeamsPage() {
           {/* Team Members Grid/List */}
           {viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredMembers.map((member) => (
+              {filteredMembers.map((member: TeamMember) => (
                 <Card
                   key={member.id}
                   className="glass border-glass-border hover:border-primary/50 transition-all group"
@@ -462,7 +462,7 @@ export default function TeamsPage() {
                         </Badge>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {member.projects.slice(0, 2).map((project, idx) => (
+                        {member.projects.slice(0, 2).map((project: string, idx: number) => (
                           <Badge
                             key={idx}
                             variant="outline"
@@ -494,7 +494,7 @@ export default function TeamsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredMembers.map((member) => (
+              {filteredMembers.map((member: TeamMember) => (
                 <Card
                   key={member.id}
                   className="glass border-glass-border hover:border-primary/50 transition-all"
