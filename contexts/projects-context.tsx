@@ -1,151 +1,134 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import type { Project } from "@/lib/types"
-
-// Default projects data
-const defaultProjects: Project[] = [
-  {
-    id: "1",
-    name: "Website Redesign",
-    description: "Redesigning the main website with modern UI/UX principles",
-    status: "in-progress",
-    color: "bg-chart-1",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-      { name: "David", avatar: "/man-designer.png" },
-    ],
-    taskCount: 8,
-    completedTasks: 2,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    name: "Mobile App",
-    description: "Building a cross-platform mobile application",
-    status: "in-progress",
-    color: "bg-chart-2",
-    teamMembers: [
-      { name: "Alice", avatar: "/professional-woman.png" },
-      { name: "Bob", avatar: "/professional-man.png" },
-    ],
-    taskCount: 12,
-    completedTasks: 5,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "3",
-    name: "Marketing Campaign",
-    description: "Q1 marketing campaign planning and execution",
-    status: "planning",
-    color: "bg-chart-3",
-    teamMembers: [
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 6,
-    completedTasks: 0,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "4",
-    name: "API Development",
-    description: "RESTful API development and documentation",
-    status: "completed",
-    color: "bg-chart-4",
-    teamMembers: [
-      { name: "David", avatar: "/man-designer.png" },
-      { name: "Alice", avatar: "/professional-woman.png" },
-    ],
-    taskCount: 15,
-    completedTasks: 15,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "5",
-    name: "Database Migration",
-    description: "Migrating to a new database system",
-    status: "on-hold",
-    color: "bg-chart-5",
-    teamMembers: [
-      { name: "Bob", avatar: "/professional-man.png" },
-      { name: "Carol", avatar: "/woman-developer.png" },
-    ],
-    taskCount: 10,
-    completedTasks: 3,
-    createdAt: new Date().toISOString(),
-  },
-]
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react"
+import { projectsService, CreateProjectData, UpdateProjectData } from "@/services/projects.service"
+import type { Project, ProjectStatus } from "@/lib/types"
+import { ApiError } from "@/lib/api-client"
 
 interface ProjectsContextType {
   projects: Project[]
-  addProject: (project: Omit<Project, "id" | "createdAt">) => void
+  isLoading: boolean
+  error: string | null
+  addProject: (project: CreateProjectData) => Promise<Project>
   getProject: (id: string) => Project | undefined
-  updateProject: (id: string, updates: Partial<Project>) => void
-  deleteProject: (id: string) => void
+  updateProject: (id: string, updates: UpdateProjectData) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
+  refreshProjects: () => Promise<void>
+  clearError: () => void
 }
 
 const ProjectsContext = createContext<ProjectsContextType | undefined>(undefined)
 
-const STORAGE_KEY = "taskManagement_projects"
-
 export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Load projects from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored)
-          setProjects(parsed)
-        } catch (error) {
-          console.error("Failed to parse stored projects:", error)
-          setProjects(defaultProjects)
-        }
-      } else {
-        setProjects(defaultProjects)
-      }
+  // Load projects from API on mount
+  const loadProjects = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const { projects: fetchedProjects } = await projectsService.getProjects()
+      setProjects(fetchedProjects)
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to load projects'
+      setError(errorMessage)
+      console.error('Failed to load projects:', err)
+    } finally {
+      setIsLoading(false)
     }
   }, [])
 
-  // Save projects to localStorage whenever they change
   useEffect(() => {
-    if (typeof window !== "undefined" && projects.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-    }
-  }, [projects])
+    loadProjects()
+  }, [loadProjects])
 
-  const addProject = (projectData: Omit<Project, "id" | "createdAt">) => {
-    const newProject: Project = {
-      ...projectData,
-      id: Date.now().toString(), // Simple ID generation
-      createdAt: new Date().toISOString(),
-      taskCount: 0,
-      completedTasks: 0,
+  const addProject = async (projectData: CreateProjectData): Promise<Project> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const newProject = await projectsService.createProject(projectData)
+      setProjects((prev) => [...prev, newProject])
+      return newProject
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to create project'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
     }
-    setProjects((prev) => [...prev, newProject])
   }
 
   const getProject = (id: string): Project | undefined => {
     return projects.find((p) => p.id === id)
   }
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    setProjects((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    )
+  const updateProject = async (id: string, updates: UpdateProjectData): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const updatedProject = await projectsService.updateProject(id, updates)
+      setProjects((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...updatedProject } : p))
+      )
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to update project'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const deleteProject = (id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id))
+  const deleteProject = async (id: string): Promise<void> => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await projectsService.deleteProject(id)
+      setProjects((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Failed to delete project'
+      setError(errorMessage)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshProjects = async (): Promise<void> => {
+    await loadProjects()
+  }
+
+  const clearError = () => {
+    setError(null)
   }
 
   return (
     <ProjectsContext.Provider
-      value={{ projects, addProject, getProject, updateProject, deleteProject }}
+      value={{
+        projects,
+        isLoading,
+        error,
+        addProject,
+        getProject,
+        updateProject,
+        deleteProject,
+        refreshProjects,
+        clearError,
+      }}
     >
       {children}
     </ProjectsContext.Provider>

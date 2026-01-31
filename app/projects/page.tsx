@@ -3,13 +3,15 @@
 import { useState } from "react"
 import { ProjectsList } from "@/components/projects-list"
 import { Sidebar } from "@/components/sidebar"
+import { ProtectedRoute } from "@/components/protected-route"
 import { cn } from "@/lib/utils"
 
 export default function ProjectsPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen animated-gradient-bg flex">
+    <ProtectedRoute>
+      <div className="min-h-screen animated-gradient-bg flex">
       {/* Ambient background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-primary/10 blur-[120px] animate-pulse" />
@@ -35,5 +37,6 @@ export default function ProjectsPage() {
         <ProjectsList />
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

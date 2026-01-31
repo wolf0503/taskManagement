@@ -34,20 +34,21 @@ import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
 import { toast } from "@/hooks/use-toast"
 
-// Color options for projects
+// Color options for projects (hex colors as per backend)
 const colorOptions = [
-  { value: "bg-chart-1", label: "Blue" },
-  { value: "bg-chart-2", label: "Green" },
-  { value: "bg-chart-3", label: "Yellow" },
-  { value: "bg-chart-4", label: "Purple" },
-  { value: "bg-chart-5", label: "Pink" },
+  { value: "#3B82F6", label: "Blue", class: "bg-blue-500" },
+  { value: "#10B981", label: "Green", class: "bg-green-500" },
+  { value: "#F59E0B", label: "Yellow", class: "bg-yellow-500" },
+  { value: "#8B5CF6", label: "Purple", class: "bg-purple-500" },
+  { value: "#EC4899", label: "Pink", class: "bg-pink-500" },
+  { value: "#EF4444", label: "Red", class: "bg-red-500" },
 ]
 
 // Form validation schema
 const projectSchema = z.object({
-  name: z.string().min(1, "Project name is required").max(100, "Name is too long"),
-  description: z.string().max(500, "Description is too long").optional(),
-  status: z.enum(["in-progress", "completed", "on-hold", "planning"]),
+  name: z.string().min(1, "Project name is required").max(255, "Name is too long"),
+  description: z.string().max(500, "Description is too long"),
+  status: z.enum(["IN_PROGRESS", "COMPLETED", "ON_HOLD", "PLANNING"]),
   color: z.string().min(1, "Color is required"),
 })
 
@@ -59,7 +60,7 @@ interface AddProjectDialogProps {
 }
 
 export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) {
-  const { addProject } = useProjects()
+  const { addProject, isLoading } = useProjects()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<ProjectFormValues>({
@@ -67,20 +68,19 @@ export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) 
     defaultValues: {
       name: "",
       description: "",
-      status: "planning",
-      color: "bg-chart-1",
+      status: "PLANNING",
+      color: "#3B82F6", // Default blue color
     },
   })
 
   const onSubmit = async (data: ProjectFormValues) => {
     setIsSubmitting(true)
     try {
-      addProject({
+      await addProject({
         name: data.name,
-        description: data.description || "",
+        description: data.description,
         status: data.status,
         color: data.color,
-        teamMembers: [],
       })
 
       toast({
@@ -93,7 +93,7 @@ export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) 
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to create project. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create project. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -176,10 +176,10 @@ export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="planning">Planning</SelectItem>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="on-hold">On Hold</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="PLANNING">Planning</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="ON_HOLD">On Hold</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -207,7 +207,7 @@ export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) 
                           <SelectItem key={color.value} value={color.value}>
                             <div className="flex items-center gap-2">
                               <div
-                                className={`w-4 h-4 rounded ${color.value}`}
+                                className={`w-4 h-4 rounded ${color.class}`}
                               />
                               <span>{color.label}</span>
                             </div>

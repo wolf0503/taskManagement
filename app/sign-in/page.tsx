@@ -5,21 +5,23 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react"
+import { Mail, Lock, ArrowRight, Sparkles, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 })
 
 type SignInFormValues = z.infer<typeof signInSchema>
 
 export default function SignInPage() {
-  const [isLoading, setIsLoading] = useState(false)
+  const { login, isLoading, error, clearError } = useAuth()
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -30,14 +32,13 @@ export default function SignInPage() {
   })
 
   const onSubmit = async (data: SignInFormValues) => {
-    setIsLoading(true)
-    // TODO: Implement actual authentication
-    console.log("Sign in:", data)
-    setTimeout(() => {
-      setIsLoading(false)
-      // Redirect to homepage after successful sign in
-      window.location.href = "/"
-    }, 1000)
+    clearError()
+    try {
+      await login(data.email, data.password)
+    } catch (err) {
+      // Error is handled by auth context
+      console.error('Login failed:', err)
+    }
   }
 
   return (
@@ -67,6 +68,13 @@ export default function SignInPage() {
 
         {/* Sign In Form */}
         <div className="glass rounded-2xl p-8 shadow-2xl">
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField

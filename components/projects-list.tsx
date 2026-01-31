@@ -12,22 +12,22 @@ import { useColumns } from "@/contexts/columns-context"
 import { AddProjectDialog } from "@/components/add-project-dialog"
 
 const statusConfig = {
-  "in-progress": {
+  "IN_PROGRESS": {
     label: "In Progress",
     icon: Clock,
     className: "bg-accent/20 text-accent",
   },
-  completed: {
+  "COMPLETED": {
     label: "Completed",
     icon: CheckCircle2,
     className: "bg-status-done/20 text-status-done",
   },
-  "on-hold": {
+  "ON_HOLD": {
     label: "On Hold",
     icon: Pause,
     className: "bg-muted/50 text-muted-foreground",
   },
-  planning: {
+  "PLANNING": {
     label: "Planning",
     icon: FileText,
     className: "bg-status-todo/20 text-status-todo",
