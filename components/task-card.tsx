@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { MessageSquare, Paperclip, Calendar, MoreHorizontal, Flag, Trash2, Edit } from "lucide-react"
+import { Calendar, Clock, MoreHorizontal, Flag, Trash2, Edit } from "lucide-react"
 import type { Task } from "@/lib/types"
 
 interface TaskCardProps {
@@ -18,9 +18,9 @@ interface TaskCardProps {
 }
 
 const priorityConfig = {
-  high: { color: "bg-destructive/20 text-destructive", icon: "🔴" },
-  medium: { color: "bg-chart-4/20 text-chart-4", icon: "🟡" },
-  low: { color: "bg-accent/20 text-accent", icon: "🟢" },
+  HIGH: { color: "bg-destructive/20 text-destructive", icon: "🔴" },
+  MEDIUM: { color: "bg-chart-4/20 text-chart-4", icon: "🟡" },
+  LOW: { color: "bg-accent/20 text-accent", icon: "🟢" },
 }
 
 const tagColors: Record<string, string> = {
@@ -69,9 +69,9 @@ export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps)
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", priorityConfig[task.priority].color)}>
-            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1).toLowerCase()}
           </span>
-          {task.tags.slice(0, 2).map((tag) => (
+          {task.tags && Array.isArray(task.tags) && task.tags.slice(0, 2).map((tag) => (
             <span
               key={tag}
               className={cn(
@@ -114,27 +114,27 @@ export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps)
       {/* Footer */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 text-muted-foreground">
-          {task.comments > 0 && (
+          {task.dueDate && (
             <div className="flex items-center gap-1 text-xs">
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span>{task.comments}</span>
+              <Calendar className="h-3.5 w-3.5" />
+              <span>{new Date(task.dueDate).toLocaleDateString()}</span>
             </div>
           )}
-          {task.attachments > 0 && (
+          {task.estimatedHours && (
             <div className="flex items-center gap-1 text-xs">
-              <Paperclip className="h-3.5 w-3.5" />
-              <span>{task.attachments}</span>
+              <Clock className="h-3.5 w-3.5" />
+              <span>{task.estimatedHours}h</span>
             </div>
           )}
-          <div className="flex items-center gap-1 text-xs">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>{task.dueDate}</span>
-          </div>
         </div>
-        <Avatar className="h-7 w-7 ring-2 ring-background">
-          <AvatarImage src={task.assignee.avatar || "/placeholder.svg"} alt={task.assignee.name} />
-          <AvatarFallback className="bg-primary/20 text-primary text-xs">{task.assignee.name[0]}</AvatarFallback>
-        </Avatar>
+        {task.assignee && (
+          <Avatar className="h-7 w-7 ring-2 ring-background">
+            <AvatarImage src={task.assignee.avatar || "/placeholder.svg"} alt={task.assignee.firstName} />
+            <AvatarFallback className="bg-primary/20 text-primary text-xs">
+              {task.assignee.firstName?.[0] || task.assignee.email?.[0] || "?"}
+            </AvatarFallback>
+          </Avatar>
+        )}
       </div>
     </div>
   )

@@ -10,22 +10,22 @@ import { AddTaskDialog } from "@/components/add-task-dialog"
 import { useFilters } from "@/contexts/filters-context"
 
 const statusConfig = {
-  "in-progress": {
+  "IN_PROGRESS": {
     label: "In Progress",
     icon: Clock,
     className: "bg-accent/20 text-accent",
   },
-  completed: {
+  "COMPLETED": {
     label: "Completed",
     icon: CheckCircle2,
     className: "bg-status-done/20 text-status-done",
   },
-  "on-hold": {
+  "ON_HOLD": {
     label: "On Hold",
     icon: Pause,
     className: "bg-muted/50 text-muted-foreground",
   },
-  planning: {
+  "PLANNING": {
     label: "Planning",
     icon: FileText,
     className: "bg-status-todo/20 text-status-todo",
@@ -44,7 +44,7 @@ export function Header({ project, projectId }: HeaderProps) {
   
   const projectName = project?.name || "Website Redesign"
   const projectDescription = project?.description || "Redesigning the main website with modern UI/UX principles"
-  const projectStatus = project?.status || "in-progress"
+  const projectStatus = project?.status || "IN_PROGRESS"
   const teamMembers = project?.teamMembers || [
     { name: "Alice", avatar: "/professional-woman.png" },
     { name: "Bob", avatar: "/professional-man.png" },
@@ -52,7 +52,7 @@ export function Header({ project, projectId }: HeaderProps) {
     { name: "David", avatar: "/man-designer.png" },
   ]
 
-  const statusInfo = statusConfig[projectStatus]
+  const statusInfo = statusConfig[projectStatus] || statusConfig["IN_PROGRESS"]
   const StatusIcon = statusInfo.icon
 
   const handleAssigneeToggle = (assigneeName: string) => {

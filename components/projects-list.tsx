@@ -197,7 +197,7 @@ export function ProjectsList() {
               <div className="flex items-center justify-between pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
                   <div className="flex -space-x-2">
-                    {project.teamMembers.slice(0, 3).map((member, i) => (
+                    {(project.teamMembers || []).slice(0, 3).map((member, i) => (
                       <Avatar
                         key={member.name}
                         className="h-7 w-7 ring-2 ring-background"
@@ -208,14 +208,14 @@ export function ProjectsList() {
                         </AvatarFallback>
                       </Avatar>
                     ))}
-                    {project.teamMembers.length > 3 && (
+                    {(project.teamMembers?.length || 0) > 3 && (
                       <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
-                        +{project.teamMembers.length - 3}
+                        +{(project.teamMembers?.length || 0) - 3}
                       </div>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground ml-2">
-                    {project.teamMembers.length} {project.teamMembers.length === 1 ? "member" : "members"}
+                    {project.teamMembers?.length || 0} {(project.teamMembers?.length || 0) === 1 ? "member" : "members"}
                   </span>
                 </div>
               </div>
@@ -254,7 +254,7 @@ export function ProjectsList() {
                     <div className="text-xs text-muted-foreground">Complete</div>
                   </div>
                   <div className="flex -space-x-2">
-                    {project.teamMembers.slice(0, 3).map((member) => (
+                    {(project.teamMembers || []).slice(0, 3).map((member) => (
                       <Avatar
                         key={member.name}
                         className="h-7 w-7 ring-2 ring-background"
@@ -265,9 +265,9 @@ export function ProjectsList() {
                         </AvatarFallback>
                       </Avatar>
                     ))}
-                    {project.teamMembers.length > 3 && (
+                    {(project.teamMembers?.length || 0) > 3 && (
                       <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
-                        +{project.teamMembers.length - 3}
+                        +{(project.teamMembers?.length || 0) - 3}
                       </div>
                     )}
                   </div>

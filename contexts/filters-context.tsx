@@ -4,7 +4,7 @@ import { createContext, useContext, useState, ReactNode } from "react"
 
 export interface TaskFilters {
   assignees: string[] // Array of assignee names
-  priority: "high" | "medium" | "low" | null
+  priority: "HIGH" | "MEDIUM" | "LOW" | null
   showAll: boolean
 }
 

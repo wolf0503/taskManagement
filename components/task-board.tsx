@@ -65,11 +65,11 @@ export function TaskBoard({ projectId }: TaskBoardProps) {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "high":
+      case "HIGH":
         return "bg-destructive/20 text-destructive border-destructive/30"
-      case "medium":
+      case "MEDIUM":
         return "bg-accent/20 text-accent border-accent/30"
-      case "low":
+      case "LOW":
         return "bg-muted/50 text-muted-foreground border-muted"
       default:
         return "bg-muted/50 text-muted-foreground border-muted"
@@ -156,7 +156,7 @@ export function TaskBoard({ projectId }: TaskBoardProps) {
                         <h3 className="font-medium truncate">{task.title}</h3>
                         {task.priority && (
                           <Badge variant="outline" className={cn("text-xs", getPriorityColor(task.priority))}>
-                            {task.priority}
+                            {task.priority.charAt(0).toUpperCase() + task.priority.slice(1).toLowerCase()}
                           </Badge>
                         )}
                       </div>

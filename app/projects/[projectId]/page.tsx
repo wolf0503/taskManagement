@@ -10,6 +10,8 @@ import type { Project } from "@/lib/types"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
+import { useColumns } from "@/contexts/columns-context"
+import { useTasks } from "@/contexts/tasks-context"
 
 export default function ProjectDetailPage() {
   const params = useParams()
@@ -17,6 +19,8 @@ export default function ProjectDetailPage() {
   const projectId = params.projectId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { getProject } = useProjects()
+  const { fetchColumns } = useColumns()
+  const { loadProjectTasks } = useTasks()
   const [project, setProject] = useState<Project | null>(null)
 
   useEffect(() => {
@@ -24,11 +28,16 @@ export default function ProjectDetailPage() {
     const foundProject = getProject(projectId)
     if (foundProject) {
       setProject(foundProject)
+      
+      // ✅ Fetch columns and tasks when project loads
+      console.log('🔄 Loading project data for:', projectId)
+      fetchColumns(projectId, false) // false = include tasks in columns
+      loadProjectTasks(projectId)
     } else {
       // Project not found, redirect to projects
       router.push("/projects")
     }
-  }, [projectId, router, getProject])
+  }, [projectId, router, getProject, fetchColumns, loadProjectTasks])
 
   if (!project) {
     return (

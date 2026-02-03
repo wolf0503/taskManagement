@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -47,7 +47,7 @@ const taskSchema = z.object({
   title: z.string().min(1, "Task title is required").max(200, "Title is too long"),
   description: z.string().max(1000, "Description is too long").optional(),
   columnId: z.string().min(1, "Column is required"),
-  priority: z.enum(["high", "medium", "low"]),
+  priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
   tags: z.array(z.string()).optional(),
   assigneeName: z.string().optional(),
   assigneeAvatar: z.string().optional(),
@@ -71,7 +71,7 @@ export function AddTaskDialog({
 }: AddTaskDialogProps) {
   const { addTask } = useTasks()
   const { getProject } = useProjects()
-  const { getColumns } = useColumns()
+  const { getColumns, fetchColumns } = useColumns()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tagInput, setTagInput] = useState("")
 
@@ -80,13 +80,21 @@ export function AddTaskDialog({
   const columns = getColumns(projectId)
   const firstColumnId = columns.length > 0 ? columns[0].id : ""
 
+  // ✅ Fetch columns from backend when dialog opens
+  useEffect(() => {
+    if (open && projectId) {
+      console.log('🔄 Fetching columns for project:', projectId)
+      fetchColumns(projectId, true) // true = simple mode (without tasks)
+    }
+  }, [open, projectId, fetchColumns])
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       title: "",
       description: "",
       columnId: defaultColumnId || firstColumnId,
-      priority: "medium",
+      priority: "MEDIUM",
       tags: [],
       assigneeName: "",
       assigneeAvatar: "",
@@ -102,27 +110,28 @@ export function AddTaskDialog({
   const onSubmit = async (data: TaskFormValues) => {
     setIsSubmitting(true)
     try {
-      // Format due date
+      // Format due date to ISO string if present
       const dueDateString = data.dueDate
-        ? format(data.dueDate, "MMM d")
-        : ""
+        ? data.dueDate.toISOString()
+        : undefined
 
-      // Get assignee info
-      const assignee = data.assigneeName && data.assigneeAvatar
-        ? { name: data.assigneeName, avatar: data.assigneeAvatar }
-        : teamMembers[0] || { name: "Unassigned", avatar: "/placeholder-user.jpg" }
+      // Get assignee ID (for now, using assigneeName as ID until we have proper user IDs)
+      const assigneeId = data.assigneeName || undefined
 
-      addTask(projectId, {
+      const taskPayload = {
         title: data.title,
-        description: data.description || "",
-        columnId: data.columnId,
+        description: data.description,
+        columnId: data.columnId, // ✅ Now a valid UUID from backend
         priority: data.priority,
         tags: data.tags || [],
-        assignee,
+        assigneeId,
         dueDate: dueDateString,
-        comments: 0,
-        attachments: 0,
-      })
+      }
+
+      // DEBUG: Log the payload being sent
+      console.log('✅ Creating task with payload:', taskPayload)
+
+      await addTask(projectId, taskPayload)
 
       toast({
         title: "Task created",
@@ -133,9 +142,12 @@ export function AddTaskDialog({
       setTagInput("")
       onOpenChange(false)
     } catch (error) {
+      // DEBUG: Log the full error
+      console.error('Task creation error:', error)
+      
       toast({
         title: "Error",
-        description: "Failed to create task. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create task. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -156,7 +168,7 @@ export function AddTaskDialog({
         title: "",
         description: "",
         columnId: defaultColumnId || firstColumnId,
-        priority: "medium",
+        priority: "MEDIUM",
         tags: [],
         assigneeName: "",
         assigneeAvatar: "",
@@ -169,7 +181,7 @@ export function AddTaskDialog({
         title: "",
         description: "",
         columnId: defaultColumnId || firstColumnId,
-        priority: "medium",
+        priority: "MEDIUM",
         tags: [],
         assigneeName: "",
         assigneeAvatar: "",
@@ -286,9 +298,9 @@ export function AddTaskDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="LOW">Low</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
