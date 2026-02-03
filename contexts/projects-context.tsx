@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react"
 import { projectsService, CreateProjectData, UpdateProjectData } from "@/services/projects.service"
 import type { Project, ProjectStatus } from "@/lib/types"
-import { ApiError } from "@/lib/api-client"
+import { ApiError, apiClient } from "@/lib/api-client"
 
 interface ProjectsContextType {
   projects: Project[]
@@ -24,8 +24,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load projects from API on mount
+  // Load projects from API
   const loadProjects = useCallback(async () => {
+    // Only load projects if user is authenticated
+    const token = apiClient.getToken()
+    if (!token) {
+      // User is not authenticated, don't attempt to load projects
+      setProjects([])
+      setIsLoading(false)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
@@ -43,8 +52,37 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Load projects on mount and when authentication changes
   useEffect(() => {
-    loadProjects()
+    const token = apiClient.getToken()
+    if (token) {
+      loadProjects()
+    } else {
+      // Clear projects if no token
+      setProjects([])
+    }
+  }, []) // Only run on mount
+
+  // Listen for authentication changes
+  useEffect(() => {
+    const handleAuthChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ token: string | null; isAuthenticated: boolean }>
+      if (customEvent.detail.isAuthenticated) {
+        // User logged in, reload projects
+        loadProjects()
+      } else {
+        // User logged out, clear projects
+        setProjects([])
+        setError(null)
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth-change', handleAuthChange)
+      return () => {
+        window.removeEventListener('auth-change', handleAuthChange)
+      }
+    }
   }, [loadProjects])
 
   const addProject = async (projectData: CreateProjectData): Promise<Project> => {

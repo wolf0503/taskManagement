@@ -58,6 +58,11 @@ class ApiClient {
       } else {
         localStorage.removeItem('accessToken')
       }
+      
+      // Dispatch custom event for auth state changes
+      window.dispatchEvent(new CustomEvent('auth-change', { 
+        detail: { token, isAuthenticated: !!token } 
+      }))
     }
   }
 

@@ -39,9 +39,14 @@ class AuthService {
    * Register a new user
    */
   async register(data: RegisterData): Promise<User> {
+    // Filter out empty string values (backend expects undefined/null for optional fields)
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, value]) => value !== "")
+    ) as RegisterData
+    
     const response = await apiClient.post<User>(
       API_ENDPOINTS.AUTH.REGISTER,
-      data
+      cleanData
     )
     return response.data!
   }
