@@ -192,12 +192,12 @@ class ApiClient {
         throw error
       }
 
-      // Network or parsing error
-      throw new ApiError(
-        0,
-        'NETWORK_ERROR',
-        error instanceof Error ? error.message : 'Network error occurred'
-      )
+      // Network or parsing error (e.g. backend not running, wrong API URL, CORS)
+      const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch'
+      const message = isNetworkError
+        ? `Cannot reach the server at ${this.baseURL}. Make sure the backend is running and NEXT_PUBLIC_API_URL in .env.local is correct.`
+        : (error instanceof Error ? error.message : 'Network error occurred')
+      throw new ApiError(0, 'NETWORK_ERROR', message)
     }
   }
 

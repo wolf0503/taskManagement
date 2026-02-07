@@ -34,20 +34,17 @@ import { useColumns } from "@/contexts/columns-context"
 import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
-// Color options for columns
+// Color options for columns (backend expects hex; see BACKEND_COLUMNS_API_REQUEST.md)
 const colorOptions = [
-  { value: "var(--status-todo)", label: "Blue (To Do)", preview: "oklch(0.65 0.15 260)" },
-  { value: "var(--status-progress)", label: "Yellow (In Progress)", preview: "oklch(0.7 0.18 80)" },
-  { value: "var(--status-review)", label: "Cyan (Review)", preview: "oklch(0.65 0.2 180)" },
-  { value: "var(--status-done)", label: "Green (Done)", preview: "oklch(0.65 0.2 145)" },
-  { value: "var(--chart-1)", label: "Chart Blue", preview: "oklch(0.7 0.15 220)" },
-  { value: "var(--chart-2)", label: "Chart Cyan", preview: "oklch(0.65 0.2 180)" },
-  { value: "var(--chart-3)", label: "Chart Green", preview: "oklch(0.75 0.15 140)" },
-  { value: "var(--chart-4)", label: "Chart Purple", preview: "oklch(0.7 0.18 280)" },
-  { value: "var(--chart-5)", label: "Chart Pink", preview: "oklch(0.65 0.15 320)" },
-  { value: "var(--primary)", label: "Primary", preview: "oklch(0.7 0.15 220)" },
-  { value: "var(--accent)", label: "Accent", preview: "oklch(0.65 0.2 180)" },
-  { value: "var(--destructive)", label: "Destructive", preview: "oklch(0.6 0.2 25)" },
+  { value: "#6366f1", label: "Blue (To Do)" },
+  { value: "#f59e0b", label: "Yellow (In Progress)" },
+  { value: "#06b6d4", label: "Cyan (Review)" },
+  { value: "#10b981", label: "Green (Done)" },
+  { value: "#3b82f6", label: "Chart Blue" },
+  { value: "#8b5cf6", label: "Chart Purple" },
+  { value: "#ec4899", label: "Chart Pink" },
+  { value: "#14b8a6", label: "Teal" },
+  { value: "#ef4444", label: "Red" },
 ]
 
 // Form validation schema
@@ -65,23 +62,25 @@ interface AddColumnDialogProps {
 }
 
 export function AddColumnDialog({ open, onOpenChange, projectId }: AddColumnDialogProps) {
-  const { addColumn } = useColumns()
+  const { addColumn, getColumns } = useColumns()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<ColumnFormValues>({
     resolver: zodResolver(columnSchema),
     defaultValues: {
       title: "",
-      color: "var(--chart-1)",
+      color: "#3b82f6",
     },
   })
 
   const onSubmit = async (data: ColumnFormValues) => {
     setIsSubmitting(true)
     try {
-      addColumn(projectId, {
+      const position = getColumns(projectId).length
+      await addColumn(projectId, {
         title: data.title,
         color: data.color,
+        position,
       })
 
       toast({
@@ -155,7 +154,7 @@ export function AddColumnDialog({ open, onOpenChange, projectId }: AddColumnDial
                             <div className="flex items-center gap-2">
                               <div
                                 className="w-4 h-4 rounded-full border border-border"
-                                style={{ backgroundColor: selectedColorOption.preview }}
+                                style={{ backgroundColor: selectedColorOption.value }}
                               />
                               <span>{selectedColorOption.label}</span>
                             </div>
@@ -169,7 +168,7 @@ export function AddColumnDialog({ open, onOpenChange, projectId }: AddColumnDial
                           <div className="flex items-center gap-2">
                             <div
                               className="w-4 h-4 rounded-full border border-border"
-                              style={{ backgroundColor: color.preview }}
+                              style={{ backgroundColor: color.value }}
                             />
                             <span>{color.label}</span>
                           </div>
@@ -192,7 +191,7 @@ export function AddColumnDialog({ open, onOpenChange, projectId }: AddColumnDial
                 <div className="flex items-center gap-3">
                   <div
                     className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: selectedColorOption?.preview || selectedColor }}
+                    style={{ backgroundColor: selectedColor }}
                   />
                   <span className="text-sm text-muted-foreground">
                     {form.watch("title") || "Column Title"}

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -151,6 +152,7 @@ const dashboardData: Record<string, any> = {
 export default function DashboardDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const dashboardId = params.dashboardId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [dashboard, setDashboard] = useState<any>(null)
@@ -171,9 +173,10 @@ export default function DashboardDetailPage() {
     const text = commentText.trim()
     if (!text) return
 
+    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
     const newComment = {
-      user: "John Doe",
-      avatar: "/professional-avatar.png",
+      user: displayName,
+      avatar: user?.avatar ?? "/professional-avatar.png",
       text: text,
       time: "Just now"
     }

@@ -12,11 +12,20 @@ import {
   ChevronLeft,
   Plus,
   Search,
-  Bell,
   Sparkles,
+  LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/contexts/auth-context"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboards", active: false, href: "/dashboard" },
@@ -42,6 +51,12 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
   const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
+  const { user, logout } = useAuth()
+
+  const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
+  const initials = displayName
+    ? displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (user?.email?.[0] ?? "?").toUpperCase()
   
   const collapsed = collapsedProp !== undefined ? collapsedProp : internalCollapsed
   const setCollapsed = (value: boolean | ((prev: boolean) => boolean)) => {
@@ -167,24 +182,43 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
 
         {/* User */}
         <div className={cn("p-4 border-t border-border/50", collapsed && "flex justify-center")}>
-          <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-            <Avatar className="h-10 w-10 ring-2 ring-primary/30">
-              <AvatarImage src="/professional-avatar.png" />
-              <AvatarFallback className="bg-primary/20 text-primary">JD</AvatarFallback>
-            </Avatar>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">John Doe</p>
-                <p className="text-xs text-muted-foreground truncate">john@flowboard.io</p>
-              </div>
-            )}
-            {!collapsed && (
-              <Button variant="ghost" size="icon" className="shrink-0 hover:bg-secondary relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive animate-pulse" />
-              </Button>
-            )}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "w-full flex items-center gap-3 rounded-lg hover:bg-secondary/50 transition-colors outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 focus:ring-offset-transparent",
+                  collapsed && "justify-center p-1"
+                )}
+              >
+                <Avatar className="h-10 w-10 shrink-0 ring-2 ring-primary/30">
+                  <AvatarImage src={user?.avatar ?? undefined} />
+                  <AvatarFallback className="bg-primary/20 text-primary">{initials}</AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium truncate">{displayName || "User"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email ?? ""}</p>
+                  </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-56 glass border-glass-border">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium">{displayName || "User"}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email ?? ""}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => logout()}
+                className="text-destructive focus:text-destructive cursor-pointer"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
     </>

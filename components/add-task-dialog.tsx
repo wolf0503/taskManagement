@@ -38,9 +38,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTasks } from "@/contexts/tasks-context"
 import { useProjects } from "@/contexts/projects-context"
 import { useColumns } from "@/contexts/columns-context"
+import { projectsService } from "@/services/projects.service"
 import { toast } from "@/hooks/use-toast"
 import { CalendarIcon, Plus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { ProjectMember } from "@/lib/types"
 
 // Form validation schema
 const taskSchema = z.object({
@@ -49,12 +51,21 @@ const taskSchema = z.object({
   columnId: z.string().min(1, "Column is required"),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
   tags: z.array(z.string()).optional(),
-  assigneeName: z.string().optional(),
-  assigneeAvatar: z.string().optional(),
+  assigneeId: z.string().optional(),
   dueDate: z.date().optional(),
 })
 
 type TaskFormValues = z.infer<typeof taskSchema>
+
+const UNASSIGNED_VALUE = "__unassigned__"
+
+/** Display name for a project member (for assignee dropdown) */
+function memberDisplayName(m: ProjectMember): string {
+  const u = m.user
+  if (!u) return m.userId
+  const full = [u.firstName, u.lastName].filter(Boolean).join(" ")
+  return full || u.email || m.userId
+}
 
 interface AddTaskDialogProps {
   open: boolean
@@ -74,19 +85,33 @@ export function AddTaskDialog({
   const { getColumns, fetchColumns } = useColumns()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tagInput, setTagInput] = useState("")
+  const [members, setMembers] = useState<ProjectMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
 
   const project = getProject(projectId)
-  const teamMembers = project?.teamMembers || []
   const columns = getColumns(projectId)
   const firstColumnId = columns.length > 0 ? columns[0].id : ""
 
-  // ✅ Fetch columns from backend when dialog opens
+  // Fetch columns when dialog opens
   useEffect(() => {
     if (open && projectId) {
-      console.log('🔄 Fetching columns for project:', projectId)
-      fetchColumns(projectId, true) // true = simple mode (without tasks)
+      fetchColumns(projectId, true)
     }
   }, [open, projectId, fetchColumns])
+
+  // Fetch project members for assignee dropdown (real user IDs)
+  useEffect(() => {
+    if (!open || !projectId) return
+    setMembersLoading(true)
+    projectsService
+      .getProjectMembers(projectId)
+      .then(setMembers)
+      .catch(() => {
+        setMembers([])
+        toast({ title: "Could not load team members", description: "Assignee list may be empty.", variant: "destructive" })
+      })
+      .finally(() => setMembersLoading(false))
+  }, [open, projectId])
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -96,8 +121,7 @@ export function AddTaskDialog({
       columnId: defaultColumnId || firstColumnId,
       priority: "MEDIUM",
       tags: [],
-      assigneeName: "",
-      assigneeAvatar: "",
+      assigneeId: UNASSIGNED_VALUE,
       dueDate: undefined,
     },
   })
@@ -110,26 +134,19 @@ export function AddTaskDialog({
   const onSubmit = async (data: TaskFormValues) => {
     setIsSubmitting(true)
     try {
-      // Format due date to ISO string if present
-      const dueDateString = data.dueDate
-        ? data.dueDate.toISOString()
-        : undefined
-
-      // Get assignee ID (for now, using assigneeName as ID until we have proper user IDs)
-      const assigneeId = data.assigneeName || undefined
+      const dueDateString = data.dueDate ? data.dueDate.toISOString() : undefined
+      const assigneeId =
+        data.assigneeId && data.assigneeId !== UNASSIGNED_VALUE ? data.assigneeId.trim() : undefined
 
       const taskPayload = {
         title: data.title,
         description: data.description,
-        columnId: data.columnId, // ✅ Now a valid UUID from backend
+        columnId: data.columnId,
         priority: data.priority,
         tags: data.tags || [],
         assigneeId,
         dueDate: dueDateString,
       }
-
-      // DEBUG: Log the payload being sent
-      console.log('✅ Creating task with payload:', taskPayload)
 
       await addTask(projectId, taskPayload)
 
@@ -162,32 +179,19 @@ export function AddTaskDialog({
     }
   }
 
+  const defaultFormValues: TaskFormValues = {
+    title: "",
+    description: "",
+    columnId: defaultColumnId || firstColumnId,
+    priority: "MEDIUM",
+    tags: [],
+    assigneeId: UNASSIGNED_VALUE,
+    dueDate: undefined,
+  }
+
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      form.reset({
-        title: "",
-        description: "",
-        columnId: defaultColumnId || firstColumnId,
-        priority: "MEDIUM",
-        tags: [],
-        assigneeName: "",
-        assigneeAvatar: "",
-        dueDate: undefined,
-      })
-      setTagInput("")
-    } else {
-      // Reset to default values when opening
-      form.reset({
-        title: "",
-        description: "",
-        columnId: defaultColumnId || firstColumnId,
-        priority: "MEDIUM",
-        tags: [],
-        assigneeName: "",
-        assigneeAvatar: "",
-        dueDate: undefined,
-      })
-    }
+    form.reset(defaultFormValues)
+    setTagInput("")
     onOpenChange(newOpen)
   }
 
@@ -311,65 +315,70 @@ export function AddTaskDialog({
 
             <FormField
               control={form.control}
-              name="assigneeName"
+              name="assigneeId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assignee</FormLabel>
                   <Select
-                    onValueChange={(value) => {
-                      const member = teamMembers.find((m) => m.name === value)
-                      field.onChange(value)
-                      form.setValue("assigneeAvatar", member?.avatar || "")
-                    }}
-                    defaultValue={field.value}
-                    disabled={teamMembers.length === 0}
+                    onValueChange={field.onChange}
+                    value={field.value || UNASSIGNED_VALUE}
+                    disabled={membersLoading}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select assignee">
-                          {field.value ? (
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-5 w-5">
-                                <AvatarImage
-                                  src={
-                                    teamMembers.find((m) => m.name === field.value)
-                                      ?.avatar || "/placeholder-user.jpg"
-                                  }
-                                  alt={field.value}
-                                />
-                                <AvatarFallback className="text-xs">
-                                  {field.value[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span>{field.value}</span>
-                            </div>
+                        <SelectValue placeholder={membersLoading ? "Loading…" : "Select assignee (optional)"}>
+                          {field.value && field.value !== UNASSIGNED_VALUE ? (
+                            (() => {
+                              const member = members.find((m) => m.userId === field.value)
+                              if (!member) return field.value
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarImage src={member.user?.avatar ?? undefined} alt={memberDisplayName(member)} />
+                                    <AvatarFallback className="text-xs">
+                                      {memberDisplayName(member)[0]?.toUpperCase() ?? "?"}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span>{memberDisplayName(member)}</span>
+                                </div>
+                              )
+                            })()
                           ) : (
-                            "Select assignee"
+                            "Unassigned"
                           )}
                         </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.name} value={member.name}>
+                      <SelectItem value={UNASSIGNED_VALUE}>
+                        <span className="text-muted-foreground">Unassigned</span>
+                      </SelectItem>
+                      {members.map((member) => (
+                        <SelectItem key={member.userId} value={member.userId}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
-                              <AvatarImage src={member.avatar} alt={member.name} />
+                              <AvatarImage src={member.user?.avatar ?? undefined} alt={memberDisplayName(member)} />
                               <AvatarFallback className="text-xs">
-                                {member.name[0]}
+                                {memberDisplayName(member)[0]?.toUpperCase() ?? "?"}
                               </AvatarFallback>
                             </Avatar>
-                            <span>{member.name}</span>
+                            <span>{memberDisplayName(member)}</span>
+                            {member.user?.email && (
+                              <span className="text-xs text-muted-foreground truncate">({member.user.email})</span>
+                            )}
                           </div>
                         </SelectItem>
                       ))}
-                      {teamMembers.length === 0 && (
+                      {!membersLoading && members.length === 0 && (
                         <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          No team members available
+                          No project members. Add members to the project first.
                         </div>
                       )}
                     </SelectContent>
                   </Select>
+                  <FormDescription>
+                    Assign this task to a project member. Optional.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

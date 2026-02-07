@@ -7,14 +7,31 @@ import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Calendar, Clock, MoreHorizontal, Flag, Trash2, Edit } from "lucide-react"
 import type { Task } from "@/lib/types"
+import { useTasks } from "@/contexts/tasks-context"
+import { toast } from "@/hooks/use-toast"
+import { ApiError } from "@/lib/api-client"
 
 interface TaskCardProps {
   task: Task
   onDragStart: (taskId: string, columnId: string) => void
   onDragEnd: () => void
   index: number
+  projectId?: string
+  /** When provided, clicking assignee avatar filters tasks by that assignee */
+  onFilterByAssignee?: (assigneeDisplayName: string) => void
 }
 
 const priorityConfig = {
@@ -39,12 +56,40 @@ const tagColors: Record<string, string> = {
   Branding: "bg-chart-5/20 text-chart-5",
 }
 
-export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps) {
+function getAssigneeDisplayName(assignee: { firstName?: string; lastName?: string; email?: string }): string {
+  const full = [assignee.firstName, assignee.lastName].filter(Boolean).join(" ")
+  return full || assignee.email || ""
+}
+
+export function TaskCard({ task, onDragStart, onDragEnd, index, onFilterByAssignee }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { deleteTask } = useTasks()
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteTask(task.id)
+      toast({ title: "Task deleted", description: "The task has been removed." })
+      setDeleteDialogOpen(false)
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to delete task"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const handleDragStart = (e: React.DragEvent) => {
     setIsDragging(true)
     e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/plain", task.id)
+    e.dataTransfer.setData("application/json", JSON.stringify({ taskId: task.id, columnId: task.columnId }))
     onDragStart(task.id, task.columnId)
   }
 
@@ -100,11 +145,39 @@ export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps)
             <DropdownMenuItem className="gap-2">
               <Flag className="h-4 w-4" /> Set Priority
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 text-destructive">
+            <DropdownMenuItem
+              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+              onClick={handleDeleteClick}
+            >
               <Trash2 className="h-4 w-4" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Delete confirmation */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete task?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove &quot;{task.title}&quot;. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleDeleteConfirm()
+                }}
+                disabled={isDeleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Title & Description */}
@@ -128,12 +201,40 @@ export function TaskCard({ task, onDragStart, onDragEnd, index }: TaskCardProps)
           )}
         </div>
         {task.assignee && (
-          <Avatar className="h-7 w-7 ring-2 ring-background">
-            <AvatarImage src={task.assignee.avatar || "/placeholder.svg"} alt={task.assignee.firstName} />
-            <AvatarFallback className="bg-primary/20 text-primary text-xs">
-              {task.assignee.firstName?.[0] || task.assignee.email?.[0] || "?"}
-            </AvatarFallback>
-          </Avatar>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {onFilterByAssignee ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onFilterByAssignee(getAssigneeDisplayName(task.assignee!))
+                  }}
+                  className="inline-flex rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  <Avatar className="h-7 w-7 ring-2 ring-background cursor-pointer hover:ring-primary/50 transition-all">
+                    <AvatarImage src={task.assignee.avatar || "/placeholder.svg"} alt={getAssigneeDisplayName(task.assignee)} />
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                      {getAssigneeDisplayName(task.assignee)[0]?.toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              ) : (
+                <span className="inline-flex">
+                  <Avatar className="h-7 w-7 ring-2 ring-background">
+                    <AvatarImage src={task.assignee.avatar || "/placeholder.svg"} alt={getAssigneeDisplayName(task.assignee)} />
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                      {getAssigneeDisplayName(task.assignee)[0]?.toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                </span>
+              )}
+            </TooltipTrigger>
+            <TooltipContent sideOffset={6}>
+              {getAssigneeDisplayName(task.assignee)}
+              {onFilterByAssignee && <span className="block text-[10px] opacity-90">Click to filter by this assignee</span>}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
     </div>

@@ -3,10 +3,11 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Grid3X3, List, Clock, CheckCircle2, Pause, FileText, X } from "lucide-react"
+import { Plus, Grid3X3, List, Clock, CheckCircle2, Pause, FileText, X, UserPlus } from "lucide-react"
 import type { Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { AddTaskDialog } from "@/components/add-task-dialog"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useFilters } from "@/contexts/filters-context"
 
 const statusConfig = {
@@ -33,11 +34,12 @@ const statusConfig = {
 }
 
 interface HeaderProps {
-  project?: Project
+  project?: Project & { teamMembers?: { id?: string; name: string; avatar: string }[] }
   projectId?: string
+  onAddMembersClick?: () => void
 }
 
-export function Header({ project, projectId }: HeaderProps) {
+export function Header({ project, projectId, onAddMembersClick }: HeaderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { getFilters, setFilters, clearFilters } = useFilters()
   const filters = projectId ? getFilters(projectId) : { assignees: [], priority: null, showAll: true }
@@ -46,10 +48,10 @@ export function Header({ project, projectId }: HeaderProps) {
   const projectDescription = project?.description || "Redesigning the main website with modern UI/UX principles"
   const projectStatus = project?.status || "IN_PROGRESS"
   const teamMembers = project?.teamMembers || [
-    { name: "Alice", avatar: "/professional-woman.png" },
-    { name: "Bob", avatar: "/professional-man.png" },
-    { name: "Carol", avatar: "/woman-developer.png" },
-    { name: "David", avatar: "/man-designer.png" },
+    { id: "alice", name: "Alice", avatar: "/professional-woman.png" },
+    { id: "bob", name: "Bob", avatar: "/professional-man.png" },
+    { id: "carol", name: "Carol", avatar: "/woman-developer.png" },
+    { id: "david", name: "David", avatar: "/man-designer.png" },
   ]
 
   const statusInfo = statusConfig[projectStatus] || statusConfig["IN_PROGRESS"]
@@ -101,43 +103,64 @@ export function Header({ project, projectId }: HeaderProps) {
               {teamMembers.slice(0, 4).map((member, i) => {
                 const filtered = isFiltered(member.name)
                 return (
-                  <button
-                    key={member.name}
-                    onClick={() => handleAssigneeToggle(member.name)}
-                    className={cn(
-                      "relative transition-all duration-200 hover:scale-110 hover:z-10 cursor-pointer",
-                      "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background rounded-full"
-                    )}
-                    title={`${filtered ? "Remove filter" : "Filter by"} ${member.name}`}
-                  >
-                    <Avatar
-                      className={cn(
-                        "h-8 w-8 ring-2 transition-all",
-                        filtered
-                          ? "ring-primary ring-4 shadow-lg shadow-primary/50"
-                          : "ring-background hover:ring-primary/50"
-                      )}
-                      style={{ animationDelay: `${i * 100}ms` }}
-                    >
-                      <AvatarImage src={member.avatar || "/placeholder.svg"} alt={member.name} />
-                      <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                        {member.name[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    {filtered && (
-                      <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary border-2 border-background flex items-center justify-center">
-                        <X className="h-2.5 w-2.5 text-primary-foreground" />
-                      </div>
-                    )}
-                  </button>
+                  <Tooltip key={member.id ?? `member-${i}`}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleAssigneeToggle(member.name)}
+                        className={cn(
+                          "relative transition-all duration-200 hover:scale-110 hover:z-10 cursor-pointer",
+                          "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background rounded-full"
+                        )}
+                      >
+                        <Avatar
+                          className={cn(
+                            "h-8 w-8 ring-2 transition-all",
+                            filtered
+                              ? "ring-primary ring-4 shadow-lg shadow-primary/50"
+                              : "ring-background hover:ring-primary/50"
+                          )}
+                          style={{ animationDelay: `${i * 100}ms` }}
+                        >
+                          <AvatarImage src={member.avatar || "/placeholder.svg"} alt={member.name} />
+                          <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                            {member.name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        {filtered && (
+                          <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary border-2 border-background flex items-center justify-center">
+                            <X className="h-2.5 w-2.5 text-primary-foreground" />
+                          </div>
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={6}>
+                      {member.name}
+                      {filtered && " (filter active)"}
+                    </TooltipContent>
+                  </Tooltip>
                 )
               })}
               {teamMembers.length > 4 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="h-8 w-8 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground hover:bg-secondary/80 transition-colors"
+                    >
+                      +{teamMembers.length - 4}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={6}>
+                    {teamMembers.length - 4} more team members
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {onAddMembersClick && (
                 <button
-                  className="h-8 w-8 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground hover:bg-secondary/80 transition-colors"
-                  title={`${teamMembers.length - 4} more team members`}
+                  onClick={onAddMembersClick}
+                  className="h-8 w-8 rounded-full bg-primary/20 border-2 border-dashed border-primary/50 flex items-center justify-center text-primary hover:bg-primary/30 transition-colors"
+                  title="Add members to project"
                 >
-                  +{teamMembers.length - 4}
+                  <UserPlus className="h-4 w-4" />
                 </button>
               )}
             </div>

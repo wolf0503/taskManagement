@@ -1,14 +1,16 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText, LayoutGrid, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useProjects } from "@/contexts/projects-context"
 import { useTasks } from "@/contexts/tasks-context"
 import { useColumns } from "@/contexts/columns-context"
+import { projectsService } from "@/services/projects.service"
 import { AddProjectDialog } from "@/components/add-project-dialog"
 
 const statusConfig = {
@@ -41,14 +43,41 @@ export function ProjectsList() {
   const { getColumns } = useColumns()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({})
 
-  // Calculate project stats dynamically from tasks
+  // Fetch project member count for each project
+  useEffect(() => {
+    if (projects.length === 0) {
+      setMemberCounts({})
+      return
+    }
+    let cancelled = false
+    const loadCounts = async () => {
+      const counts: Record<string, number> = {}
+      await Promise.all(
+        projects.map(async (project) => {
+          try {
+            const members = await projectsService.getProjectMembers(project.id)
+            if (!cancelled) counts[project.id] = members.length
+          } catch {
+            if (!cancelled) counts[project.id] = 0
+          }
+        })
+      )
+      if (!cancelled) setMemberCounts((prev) => ({ ...prev, ...counts }))
+    }
+    loadCounts()
+    return () => {
+      cancelled = true
+    }
+  }, [projects])
+
+  // Calculate project stats dynamically from tasks + member count
   const projectsWithStats = useMemo(() => {
     return projects.map((project) => {
       const tasks = getTasks(project.id)
       const columns = getColumns(project.id)
       
-      // Find the "done" column ID (could be "done" or any column with "done" in the title)
       const doneColumnId = columns.find((col) => 
         col.id === "done" || col.title.toLowerCase().includes("done")
       )?.id
@@ -57,14 +86,16 @@ export function ProjectsList() {
       const completedTasks = doneColumnId
         ? tasks.filter((task) => task.columnId === doneColumnId).length
         : 0
+      const memberCount = memberCounts[project.id] ?? project.teamMembers?.length ?? 0
 
       return {
         ...project,
         taskCount,
         completedTasks,
+        memberCount,
       }
     })
-  }, [projects, getTasks, getColumns])
+  }, [projects, getTasks, getColumns, memberCounts])
 
   const handleProjectClick = (projectId: string) => {
     router.push(`/projects/${projectId}`)
@@ -193,29 +224,43 @@ export function ProjectsList() {
                 </div>
               )}
 
-              {/* Team Members */}
+              {/* Project members count */}
               <div className="flex items-center justify-between pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
                   <div className="flex -space-x-2">
                     {(project.teamMembers || []).slice(0, 3).map((member, i) => (
-                      <Avatar
-                        key={member.name}
-                        className="h-7 w-7 ring-2 ring-background"
-                      >
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                          {member.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
+                      <Tooltip key={(member as { id?: string }).id ?? `member-${i}`}>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <Avatar className="h-7 w-7 ring-2 ring-background">
+                              <AvatarImage src={member.avatar} alt={member.name} />
+                              <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                                {member.name[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={6}>{member.name}</TooltipContent>
+                      </Tooltip>
                     ))}
                     {(project.teamMembers?.length || 0) > 3 && (
-                      <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
-                        +{(project.teamMembers?.length || 0) - 3}
-                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex">
+                            <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
+                              +{(project.teamMembers?.length || 0) - 3}
+                            </div>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={6}>
+                          {(project.teamMembers?.length || 0) - 3} more members
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {project.teamMembers?.length || 0} {(project.teamMembers?.length || 0) === 1 ? "member" : "members"}
+                  <span className="text-xs text-muted-foreground ml-2 flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {project.memberCount ?? 0} {(project.memberCount ?? 0) === 1 ? "member" : "members"}
                   </span>
                 </div>
               </div>
@@ -253,23 +298,42 @@ export function ProjectsList() {
                     <div className="text-sm font-medium">{progress}%</div>
                     <div className="text-xs text-muted-foreground">Complete</div>
                   </div>
-                  <div className="flex -space-x-2">
-                    {(project.teamMembers || []).slice(0, 3).map((member) => (
-                      <Avatar
-                        key={member.name}
-                        className="h-7 w-7 ring-2 ring-background"
-                      >
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback className="bg-primary/20 text-primary text-xs">
-                          {member.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {(project.teamMembers?.length || 0) > 3 && (
-                      <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
-                        +{(project.teamMembers?.length || 0) - 3}
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2 text-center">
+                    <div className="flex -space-x-2">
+                      {(project.teamMembers || []).slice(0, 3).map((member, i) => (
+                        <Tooltip key={(member as { id?: string }).id ?? `member-${i}`}>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <Avatar className="h-7 w-7 ring-2 ring-background">
+                                <AvatarImage src={member.avatar} alt={member.name} />
+                                <AvatarFallback className="bg-primary/20 text-primary text-xs">
+                                  {member.name[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>{member.name}</TooltipContent>
+                        </Tooltip>
+                      ))}
+                      {(project.teamMembers?.length || 0) > 3 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                              <div className="h-7 w-7 rounded-full bg-secondary border-2 border-background flex items-center justify-center text-xs font-medium text-muted-foreground">
+                                +{(project.teamMembers?.length || 0) - 3}
+                              </div>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>
+                            {(project.teamMembers?.length || 0) - 3} more members
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {project.memberCount ?? 0} {(project.memberCount ?? 0) === 1 ? "member" : "members"}
+                    </span>
                   </div>
                 </div>
               </div>

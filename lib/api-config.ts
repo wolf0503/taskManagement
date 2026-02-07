@@ -4,8 +4,8 @@
  */
 
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1',
-  WEBSOCKET_URL: process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1',
+  WEBSOCKET_URL: process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5001',
   TIMEOUT: 30000, // 30 seconds
   TOKEN_REFRESH_BUFFER: 60000, // Refresh token 1 minute before expiration
 } as const
@@ -55,6 +55,11 @@ export const API_ENDPOINTS = {
     BY_ID: (id: string) => `/notifications/${id}`,
     MARK_READ: (id: string) => `/notifications/${id}/read`,
     MARK_ALL_READ: '/notifications/read-all',
+  },
+  // Users (for listing users when adding project members)
+  USERS: {
+    BASE: '/users',
+    LIST: '/users',
   },
   // Health
   HEALTH: '/health',

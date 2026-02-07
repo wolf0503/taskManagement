@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -48,6 +49,12 @@ import {
 export default function SettingsPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState("profile")
+  const { user } = useAuth()
+
+  const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
+  const initials = displayName
+    ? displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (user?.email?.[0] ?? "?").toUpperCase()
 
   return (
     <div className="min-h-screen animated-gradient-bg flex">
@@ -136,9 +143,9 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20 ring-4 ring-background">
-                      <AvatarImage src="/professional-avatar.png" />
+                      <AvatarImage src={user?.avatar ?? undefined} />
                       <AvatarFallback className="bg-primary/20 text-primary text-xl">
-                        JD
+                        {initials}
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
@@ -165,7 +172,7 @@ export default function SettingsPage() {
                       <Input
                         id="firstName"
                         placeholder="John"
-                        defaultValue="John"
+                        defaultValue={user?.firstName ?? ""}
                         className="glass-subtle border-glass-border"
                       />
                     </div>
@@ -174,7 +181,7 @@ export default function SettingsPage() {
                       <Input
                         id="lastName"
                         placeholder="Doe"
-                        defaultValue="Doe"
+                        defaultValue={user?.lastName ?? ""}
                         className="glass-subtle border-glass-border"
                       />
                     </div>
@@ -186,7 +193,7 @@ export default function SettingsPage() {
                       id="email"
                       type="email"
                       placeholder="john.doe@company.com"
-                      defaultValue="john.doe@company.com"
+                      defaultValue={user?.email ?? ""}
                       className="glass-subtle border-glass-border"
                     />
                   </div>
@@ -197,7 +204,7 @@ export default function SettingsPage() {
                       id="phone"
                       type="tel"
                       placeholder="+1 (555) 123-4567"
-                      defaultValue="+1 (555) 123-4567"
+                      defaultValue={user?.phone ?? ""}
                       className="glass-subtle border-glass-border"
                     />
                   </div>
@@ -207,7 +214,7 @@ export default function SettingsPage() {
                     <Textarea
                       id="bio"
                       placeholder="Tell us about yourself"
-                      defaultValue="Product Manager with 5+ years of experience in tech startups."
+                      defaultValue={user?.bio ?? ""}
                       className="glass-subtle border-glass-border min-h-[100px]"
                     />
                   </div>
@@ -217,7 +224,7 @@ export default function SettingsPage() {
                     <Input
                       id="location"
                       placeholder="San Francisco, CA"
-                      defaultValue="San Francisco, CA"
+                      defaultValue={user?.location ?? ""}
                       className="glass-subtle border-glass-border"
                     />
                   </div>

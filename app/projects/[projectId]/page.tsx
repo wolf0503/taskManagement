@@ -1,43 +1,80 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { TaskBoard } from "@/components/task-board"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
+import { AddProjectMembersDialog } from "@/components/add-project-members-dialog"
 import { cn } from "@/lib/utils"
-import type { Project } from "@/lib/types"
+import type { Project, ProjectMember } from "@/lib/types"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
 import { useColumns } from "@/contexts/columns-context"
 import { useTasks } from "@/contexts/tasks-context"
+import { projectsService } from "@/services/projects.service"
+
+function mapMembersToTeamMembers(members: ProjectMember[]): { id: string; name: string; avatar: string }[] {
+  return members.map((m) => {
+    const u = m.user
+    const name = u
+      ? [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || m.userId
+      : m.userId
+    return { id: m.userId, name, avatar: u?.avatar ?? "/placeholder.svg" }
+  })
+}
 
 export default function ProjectDetailPage() {
   const params = useParams()
   const router = useRouter()
   const projectId = params.projectId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { getProject } = useProjects()
+  const [addMembersOpen, setAddMembersOpen] = useState(false)
+  const [members, setMembers] = useState<ProjectMember[]>([])
+  const { getProject, isLoading: projectsLoading } = useProjects()
   const { fetchColumns } = useColumns()
   const { loadProjectTasks } = useTasks()
   const [project, setProject] = useState<Project | null>(null)
+  const [fetchingProject, setFetchingProject] = useState(false)
 
   useEffect(() => {
-    // Get project from context
-    const foundProject = getProject(projectId)
-    if (foundProject) {
-      setProject(foundProject)
-      
-      // ✅ Fetch columns and tasks when project loads
-      console.log('🔄 Loading project data for:', projectId)
-      fetchColumns(projectId, false) // false = include tasks in columns
+    if (!projectId) return
+    projectsService
+      .getProjectMembers(projectId)
+      .then(setMembers)
+      .catch(() => setMembers([]))
+  }, [projectId])
+
+  const teamMembers = useMemo(() => mapMembersToTeamMembers(members), [members])
+  const projectWithMembers = useMemo(
+    () => (project ? { ...project, teamMembers } : null),
+    [project, teamMembers]
+  )
+
+  // Resolve project from context or by ID (keeps page on refresh)
+  useEffect(() => {
+    if (!projectId) return
+    const fromContext = getProject(projectId)
+    if (fromContext) {
+      setProject(fromContext)
+      setFetchingProject(false)
+      fetchColumns(projectId, false)
       loadProjectTasks(projectId)
-    } else {
-      // Project not found, redirect to projects
-      router.push("/projects")
+      return
     }
-  }, [projectId, router, getProject, fetchColumns, loadProjectTasks])
+    if (projectsLoading) return
+    setFetchingProject(true)
+    projectsService
+      .getProject(projectId)
+      .then((p) => {
+        setProject(p)
+        fetchColumns(projectId, false)
+        loadProjectTasks(projectId)
+      })
+      .catch(() => router.push("/projects"))
+      .finally(() => setFetchingProject(false))
+  }, [projectId, getProject, projectsLoading, router, fetchColumns, loadProjectTasks])
 
   if (!project) {
     return (
@@ -86,9 +123,20 @@ export default function ProjectDetailPage() {
           </Button>
         </div>
 
-        <Header project={project} projectId={projectId} />
+        <Header
+          project={projectWithMembers ?? project}
+          projectId={projectId}
+          onAddMembersClick={() => setAddMembersOpen(true)}
+        />
         <TaskBoard projectId={projectId} />
       </main>
+
+      <AddProjectMembersDialog
+        projectId={projectId}
+        open={addMembersOpen}
+        onOpenChange={setAddMembersOpen}
+        onMembersChange={setMembers}
+      />
     </div>
   )
 }

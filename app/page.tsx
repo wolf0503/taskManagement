@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -26,14 +26,36 @@ import {
   Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function Home() {
   const router = useRouter()
-  const [userName] = useState("John Doe")
-  const [userEmail] = useState("john.doe@company.com")
+  const { user, isAuthenticated, isLoading, logout } = useAuth()
 
-  const handleSignOut = () => {
-    router.push("/sign-in")
+  // Redirect to sign-in if not authenticated (after loading)
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/sign-in")
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  const userName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
+  const userEmail = user?.email ?? ""
+
+  const handleSignOut = async () => {
+    await logout()
+  }
+
+  // Show loading while checking auth or redirecting
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   const features = [
@@ -121,12 +143,11 @@ export default function Home() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative gap-2 pl-2 pr-3">
                     <Avatar className="h-8 w-8 ring-2 ring-background">
-                      <AvatarImage src="/professional-avatar.png" />
+                      <AvatarImage src={user?.avatar ?? undefined} />
                       <AvatarFallback className="bg-primary/20 text-primary text-xs">
                         {userName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                          ? userName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+                          : (user?.email?.[0] ?? "?").toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="hidden sm:block text-left">
@@ -185,7 +206,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <Badge className="mb-4 bg-primary/20 text-primary border-primary/30">
-            Welcome back, {userName.split(" ")[0]}! 👋
+            Welcome back{userName ? `, ${userName.split(" ")[0]}` : ""}! 👋
           </Badge>
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             Manage Your Projects

@@ -52,14 +52,38 @@ export interface Project {
   updatedAt?: string
 }
 
-// Project Member
+// Project Member (API contract: list/add/update member responses)
+/** User when nested inside ProjectMember (API always populates this) */
+export interface ProjectMemberUser {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  avatar: string | null
+  status?: string
+}
+
 export interface ProjectMember {
   id: string
   userId: string
   projectId: string
   role: ProjectRole
   joinedAt: string
-  user?: User
+  user: ProjectMemberUser
+}
+
+/** Success response for a single member */
+export interface ProjectMemberResponse {
+  success: true
+  data: ProjectMember
+  message?: string
+}
+
+/** Success response for list of members */
+export interface ProjectMemberListResponse {
+  success: true
+  data: ProjectMember[]
+  message?: string
 }
 
 // Task

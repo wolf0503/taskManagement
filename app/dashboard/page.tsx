@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { ProtectedRoute } from "@/components/protected-route"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -205,6 +206,7 @@ const projectStats: DashboardProject[] = [
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<string | null>(null)
@@ -239,9 +241,10 @@ export default function DashboardPage() {
     const commentText = commentTexts[projectId]?.trim()
     if (!commentText) return
 
+    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
     const newComment = {
-      user: "John Doe",
-      avatar: "/professional-avatar.png",
+      user: displayName,
+      avatar: user?.avatar ?? "/professional-avatar.png",
       text: commentText,
       time: "Just now"
     }
@@ -313,7 +316,7 @@ export default function DashboardPage() {
     const project = projects.find((p: DashboardProject) => p.id === projectId)
     if (!project) return
     
-    const shareUrl = `${window.location.origin}/dashboard/${projectId}`
+    const shareUrl = `${window.location.origin}/dashboard/projects/${projectId}`
     navigator.clipboard.writeText(shareUrl)
     alert(`Link copied to clipboard: ${shareUrl}`)
   }
@@ -516,7 +519,7 @@ export default function DashboardPage() {
                   <Card 
                     key={project.id} 
                     className="glass border-glass-border hover:border-primary/50 transition-all group cursor-pointer"
-                    onClick={() => router.push(`/dashboard/${project.id}`)}
+                    onClick={() => router.push(`/dashboard/projects/${project.id}`)}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
