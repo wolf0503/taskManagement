@@ -18,7 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar, Clock, MoreHorizontal, Flag, Trash2, Edit } from "lucide-react"
+import { EditTaskDialog } from "@/components/edit-task-dialog"
+import { Calendar, Clock, MoreHorizontal, Trash2, Edit } from "lucide-react"
 import type { Task } from "@/lib/types"
 import { useTasks } from "@/contexts/tasks-context"
 import { toast } from "@/hooks/use-toast"
@@ -64,6 +65,7 @@ function getAssigneeDisplayName(assignee: { firstName?: string; lastName?: strin
 export function TaskCard({ task, onDragStart, onDragEnd, index, onFilterByAssignee }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const { deleteTask } = useTasks()
 
@@ -139,11 +141,8 @@ export function TaskCard({ task, onDragStart, onDragEnd, index, onFilterByAssign
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="glass border-glass-border" align="end">
-            <DropdownMenuItem className="gap-2">
+            <DropdownMenuItem className="gap-2" onClick={() => setEditDialogOpen(true)}>
               <Edit className="h-4 w-4" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2">
-              <Flag className="h-4 w-4" /> Set Priority
             </DropdownMenuItem>
             <DropdownMenuItem
               className="gap-2 text-destructive focus:text-destructive cursor-pointer"
@@ -153,6 +152,14 @@ export function TaskCard({ task, onDragStart, onDragEnd, index, onFilterByAssign
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Edit task dialog */}
+        <EditTaskDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          projectId={task.projectId}
+          task={editDialogOpen ? task : null}
+        />
 
         {/* Delete confirmation */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

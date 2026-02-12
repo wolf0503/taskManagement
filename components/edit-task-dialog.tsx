@@ -36,13 +36,12 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTasks } from "@/contexts/tasks-context"
-import { useProjects } from "@/contexts/projects-context"
 import { useColumns } from "@/contexts/columns-context"
 import { projectsService } from "@/services/projects.service"
 import { toast } from "@/hooks/use-toast"
 import { CalendarIcon, Plus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ProjectMember } from "@/lib/types"
+import type { ProjectMember, Task } from "@/lib/types"
 
 // Coerce tags to array (API or form may sometimes give a string)
 const tagsSchema = z
@@ -64,7 +63,6 @@ type TaskFormValues = z.infer<typeof taskSchema>
 
 const UNASSIGNED_VALUE = "__unassigned__"
 
-/** Display name for a project member (for assignee dropdown) */
 function memberDisplayName(m: ProjectMember): string {
   const u = m.user
   if (!u) return m.userId
@@ -72,49 +70,40 @@ function memberDisplayName(m: ProjectMember): string {
   return full || u.email || m.userId
 }
 
-interface AddTaskDialogProps {
+interface EditTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   projectId: string
-  defaultColumnId?: string
+  task: Task | null
 }
 
-export function AddTaskDialog({
+export function EditTaskDialog({
   open,
   onOpenChange,
   projectId,
-  defaultColumnId,
-}: AddTaskDialogProps) {
-  const { addTask } = useTasks()
-  const { getProject } = useProjects()
+  task,
+}: EditTaskDialogProps) {
+  const { updateTask, moveTask } = useTasks()
   const { getColumns, fetchColumns } = useColumns()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tagInput, setTagInput] = useState("")
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
 
-  const project = getProject(projectId)
   const columns = getColumns(projectId)
   const firstColumnId = columns.length > 0 ? columns[0].id : ""
 
-  // Fetch columns when dialog opens
   useEffect(() => {
-    if (open && projectId) {
-      fetchColumns(projectId, true)
-    }
+    if (open && projectId) fetchColumns(projectId, true)
   }, [open, projectId, fetchColumns])
 
-  // Fetch project members for assignee dropdown (real user IDs)
   useEffect(() => {
     if (!open || !projectId) return
     setMembersLoading(true)
     projectsService
       .getProjectMembers(projectId)
       .then(setMembers)
-      .catch(() => {
-        setMembers([])
-        toast({ title: "Could not load team members", description: "Assignee list may be empty.", variant: "destructive" })
-      })
+      .catch(() => setMembers([]))
       .finally(() => setMembersLoading(false))
   }, [open, projectId])
 
@@ -123,7 +112,7 @@ export function AddTaskDialog({
     defaultValues: {
       title: "",
       description: "",
-      columnId: defaultColumnId || firstColumnId,
+      columnId: firstColumnId,
       priority: "MEDIUM",
       tags: [],
       assigneeId: UNASSIGNED_VALUE,
@@ -131,45 +120,58 @@ export function AddTaskDialog({
     },
   })
 
+  // Ensure tags is always an array (API may return string)
+  const normalizeTags = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : []
+
+  // Prefill form when task or open changes
+  useEffect(() => {
+    if (open && task) {
+      form.reset({
+        title: task.title,
+        description: task.description ?? "",
+        columnId: task.columnId,
+        priority: task.priority,
+        tags: normalizeTags(task.tags),
+        assigneeId: task.assigneeId && task.assigneeId.trim() ? task.assigneeId : UNASSIGNED_VALUE,
+        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+      })
+      setTagInput("")
+    }
+  }, [open, task, form])
+
   const { fields, append, remove } = useFieldArray({
     control: form.control as any,
     name: "tags",
   })
 
   const onSubmit = async (data: TaskFormValues) => {
+    if (!task) return
     setIsSubmitting(true)
     try {
       const dueDateString = data.dueDate ? data.dueDate.toISOString() : undefined
       const assigneeId =
         data.assigneeId && data.assigneeId !== UNASSIGNED_VALUE ? data.assigneeId.trim() : undefined
 
-      const taskPayload = {
-        title: data.title,
-        description: data.description,
-        columnId: data.columnId,
-        priority: data.priority,
-        tags: data.tags || [],
-        assigneeId,
-        dueDate: dueDateString,
+      if (data.columnId !== task.columnId) {
+        await moveTask(task.id, { columnId: data.columnId, position: 0 })
       }
 
-      await addTask(projectId, taskPayload)
-
-      toast({
-        title: "Task created",
-        description: `${data.title} has been added successfully.`,
+      await updateTask(task.id, {
+        title: data.title,
+        description: data.description || undefined,
+        priority: data.priority,
+        tags: data.tags ?? [],
+        assigneeId,
+        dueDate: dueDateString,
       })
 
-      form.reset()
-      setTagInput("")
+      toast({ title: "Task updated", description: "Changes have been saved." })
       onOpenChange(false)
     } catch (error) {
-      // DEBUG: Log the full error
-      console.error('Task creation error:', error)
-      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create task. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update task.",
         variant: "destructive",
       })
     } finally {
@@ -184,29 +186,20 @@ export function AddTaskDialog({
     }
   }
 
-  const defaultFormValues: TaskFormValues = {
-    title: "",
-    description: "",
-    columnId: defaultColumnId || firstColumnId,
-    priority: "MEDIUM",
-    tags: [],
-    assigneeId: UNASSIGNED_VALUE,
-    dueDate: undefined,
-  }
-
   const handleOpenChange = (newOpen: boolean) => {
-    form.reset(defaultFormValues)
-    setTagInput("")
+    if (!newOpen) form.reset()
     onOpenChange(newOpen)
   }
+
+  if (!task) return null
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Task</DialogTitle>
+          <DialogTitle>Edit Task</DialogTitle>
           <DialogDescription>
-            Add a new task to organize your work and track progress.
+            Update the task details below.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,9 +233,6 @@ export function AddTaskDialog({
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>
-                    Provide details about what needs to be done.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -257,7 +247,7 @@ export function AddTaskDialog({
                     <FormLabel>Status</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                       disabled={columns.length === 0}
                     >
                       <FormControl>
@@ -279,11 +269,6 @@ export function AddTaskDialog({
                             </div>
                           </SelectItem>
                         ))}
-                        {columns.length === 0 && (
-                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                            No columns available
-                          </div>
-                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -299,7 +284,7 @@ export function AddTaskDialog({
                     <FormLabel>Priority</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -368,22 +353,11 @@ export function AddTaskDialog({
                               </AvatarFallback>
                             </Avatar>
                             <span>{memberDisplayName(member)}</span>
-                            {member.user?.email && (
-                              <span className="text-xs text-muted-foreground truncate">({member.user.email})</span>
-                            )}
                           </div>
                         </SelectItem>
                       ))}
-                      {!membersLoading && members.length === 0 && (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          No project members. Add members to the project first.
-                        </div>
-                      )}
                     </SelectContent>
                   </Select>
-                  <FormDescription>
-                    Assign this task to a project member. Optional.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -405,11 +379,7 @@ export function AddTaskDialog({
                             !field.value && "text-muted-foreground"
                           )}
                         >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
+                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
                       </FormControl>
@@ -424,9 +394,6 @@ export function AddTaskDialog({
                       />
                     </PopoverContent>
                   </Popover>
-                  <FormDescription>
-                    Set a due date for this task (optional).
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -438,9 +405,6 @@ export function AddTaskDialog({
               render={() => (
                 <FormItem>
                   <FormLabel>Tags (optional)</FormLabel>
-                  <FormDescription>
-                    Add tags to categorize and organize tasks.
-                  </FormDescription>
                   <div className="space-y-2">
                     <div className="flex gap-2">
                       <Input
@@ -454,13 +418,7 @@ export function AddTaskDialog({
                           }
                         }}
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={handleAddTag}
-                        disabled={!tagInput.trim()}
-                      >
+                      <Button type="button" variant="outline" size="icon" onClick={handleAddTag} disabled={!tagInput.trim()}>
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
@@ -472,13 +430,7 @@ export function AddTaskDialog({
                             className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-md text-sm"
                           >
                             <span>{form.watch("tags")?.[index]}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4"
-                              onClick={() => remove(index)}
-                            >
+                            <Button type="button" variant="ghost" size="icon" className="h-4 w-4" onClick={() => remove(index)}>
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
@@ -492,16 +444,11 @@ export function AddTaskDialog({
             />
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-                disabled={isSubmitting}
-              >
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Task"}
+                {isSubmitting ? "Saving…" : "Save changes"}
               </Button>
             </DialogFooter>
           </form>

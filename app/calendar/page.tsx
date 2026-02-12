@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,120 +46,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import type { CalendarEvent } from "@/lib/types"
+import { calendarEventsService } from "@/services/calendar-events.service"
+import { toast } from "@/hooks/use-toast"
+import { ApiError } from "@/lib/api-client"
 
-// Event type definition
-interface CalendarEvent {
-  id: string
-  title: string
-  type: string
-  date: string
-  time: string
-  duration: string
-  attendees: string[]
-  location: string
-  color: string
-  project: string
-}
-
-// Mock calendar events - initial data
-const initialEvents: CalendarEvent[] = [
-  {
-    id: "1",
-    title: "Team Standup",
-    type: "meeting",
-    date: "2024-01-22",
-    time: "09:00 AM",
-    duration: "30 min",
-    attendees: ["Sarah Johnson", "Michael Chen", "Alex Kumar"],
-    location: "Zoom",
-    color: "bg-chart-1",
-    project: "Website Redesign",
-  },
-  {
-    id: "2",
-    title: "Design Review",
-    type: "meeting",
-    date: "2024-01-22",
-    time: "02:00 PM",
-    duration: "1 hour",
-    attendees: ["Emily Rodriguez", "Sarah Johnson"],
-    location: "Conference Room A",
-    color: "bg-chart-2",
-    project: "Mobile App",
-  },
-  {
-    id: "3",
-    title: "Submit Q1 Report",
-    type: "deadline",
-    date: "2024-01-22",
-    time: "05:00 PM",
-    duration: "",
-    attendees: [],
-    location: "",
-    color: "bg-destructive",
-    project: "Marketing",
-  },
-  {
-    id: "4",
-    title: "Code Review Session",
-    type: "meeting",
-    date: "2024-01-23",
-    time: "11:00 AM",
-    duration: "45 min",
-    attendees: ["Michael Chen", "David Park", "Alex Kumar"],
-    location: "Google Meet",
-    color: "bg-chart-3",
-    project: "API Integration",
-  },
-  {
-    id: "5",
-    title: "Client Presentation",
-    type: "meeting",
-    date: "2024-01-23",
-    time: "03:00 PM",
-    duration: "2 hours",
-    attendees: ["Sarah Johnson", "Jessica Taylor", "Emily Rodriguez"],
-    location: "Client Office",
-    color: "bg-accent",
-    project: "Website Redesign",
-  },
-  {
-    id: "6",
-    title: "Sprint Planning",
-    type: "meeting",
-    date: "2024-01-24",
-    time: "10:00 AM",
-    duration: "2 hours",
-    attendees: ["Sarah Johnson", "Michael Chen", "Emily Rodriguez", "Alex Kumar"],
-    location: "Conference Room B",
-    color: "bg-chart-4",
-    project: "Mobile App",
-  },
-  {
-    id: "7",
-    title: "Deploy to Production",
-    type: "task",
-    date: "2024-01-24",
-    time: "04:00 PM",
-    duration: "1 hour",
-    attendees: ["David Park", "Michael Chen"],
-    location: "",
-    color: "bg-chart-5",
-    project: "Website Redesign",
-  },
-  {
-    id: "8",
-    title: "Marketing Campaign Launch",
-    type: "deadline",
-    date: "2024-01-25",
-    time: "09:00 AM",
-    duration: "",
-    attendees: ["Jessica Taylor"],
-    location: "",
-    color: "bg-primary",
-    project: "Marketing",
-  },
-]
+const EVENT_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-primary", "bg-accent"]
 
 const getDaysInMonth = (year: number, month: number) => {
   return new Date(year, month + 1, 0).getDate()
@@ -173,17 +65,14 @@ export default function CalendarPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [events, setEvents] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('calendarEvents')
-      return saved ? JSON.parse(saved) : initialEvents
-    }
-    return initialEvents
-  })
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsError, setEventsError] = useState<string | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
   const [newEvent, setNewEvent] = useState({
     title: "",
-    type: "meeting",
+    type: "meeting" as CalendarEvent["type"],
     date: "",
     time: "",
     duration: "",
@@ -191,11 +80,30 @@ export default function CalendarPage() {
     project: "",
   })
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('calendarEvents', JSON.stringify(events))
+  // Fetch events for the currently viewed month
+  const fetchEvents = useCallback(async () => {
+    const y = currentDate.getFullYear()
+    const m = currentDate.getMonth()
+    const startDate = `${y}-${String(m + 1).padStart(2, "0")}-01`
+    const lastDay = new Date(y, m + 1, 0).getDate()
+    const endDate = `${y}-${String(m + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
+    setEventsLoading(true)
+    setEventsError(null)
+    try {
+      const list = await calendarEventsService.getEvents({ startDate, endDate })
+      setEvents(list)
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to load events"
+      setEventsError(message)
+      setEvents([])
+    } finally {
+      setEventsLoading(false)
     }
-  }, [events])
+  }, [currentDate])
+
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -265,51 +173,73 @@ export default function CalendarPage() {
     }
   }
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     if (!newEvent.title || !newEvent.date) return
-
-    const colors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-primary", "bg-accent"]
-    const newEventData = {
-      id: String(events.length + 1),
-      title: newEvent.title,
-      type: newEvent.type,
-      date: newEvent.date,
-      time: newEvent.time || "09:00 AM",
-      duration: newEvent.duration || "1 hour",
-      attendees: [],
-      location: newEvent.location || "",
-      color: colors[events.length % colors.length],
-      project: newEvent.project || "General",
+    setIsCreating(true)
+    try {
+      const color = EVENT_COLORS[events.length % EVENT_COLORS.length]
+      const created = await calendarEventsService.createEvent({
+        title: newEvent.title,
+        type: newEvent.type,
+        date: newEvent.date,
+        time: newEvent.time || "09:00 AM",
+        duration: newEvent.duration || "1 hour",
+        location: newEvent.location || "",
+        color,
+        project: newEvent.project || "General",
+      })
+      setEvents((prev) => [...prev, created])
+      setIsCreateDialogOpen(false)
+      setNewEvent({
+        title: "",
+        type: "meeting",
+        date: "",
+        time: "",
+        duration: "",
+        location: "",
+        project: "",
+      })
+      toast({ title: "Event created", description: "The event has been added to your calendar." })
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to create event"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsCreating(false)
     }
-
-    setEvents([...events, newEventData])
-    setIsCreateDialogOpen(false)
-    setNewEvent({
-      title: "",
-      type: "meeting",
-      date: "",
-      time: "",
-      duration: "",
-      location: "",
-      project: "",
-    })
   }
 
-  const handleDeleteEvent = (eventId: string) => {
-    if (confirm('Are you sure you want to delete this event?')) {
-      setEvents(events.filter((e: CalendarEvent) => e.id !== eventId))
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm("Are you sure you want to delete this event?")) return
+    try {
+      await calendarEventsService.deleteEvent(eventId)
+      setEvents((prev) => prev.filter((e) => e.id !== eventId))
+      toast({ title: "Event deleted", description: "The event has been removed." })
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to delete event"
+      toast({ title: "Error", description: message, variant: "destructive" })
     }
   }
 
-  const handleDuplicateEvent = (eventId: string) => {
-    const event = events.find((e: CalendarEvent) => e.id === eventId)
-    if (event) {
-      const duplicated = {
-        ...event,
-        id: String(events.length + 1),
+  const handleDuplicateEvent = async (eventId: string) => {
+    const event = events.find((e) => e.id === eventId)
+    if (!event) return
+    try {
+      const created = await calendarEventsService.createEvent({
         title: `${event.title} (Copy)`,
-      }
-      setEvents([...events, duplicated])
+        type: event.type,
+        date: event.date,
+        time: event.time || "09:00 AM",
+        duration: event.duration || "",
+        attendees: event.attendees ?? [],
+        location: event.location || "",
+        color: event.color,
+        project: event.project || "General",
+      })
+      setEvents((prev) => [...prev, created])
+      toast({ title: "Event duplicated", description: "A copy has been added." })
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to duplicate event"
+      toast({ title: "Error", description: message, variant: "destructive" })
     }
   }
 
@@ -350,7 +280,11 @@ export default function CalendarPage() {
                 <div>
                   <h1 className="text-2xl font-bold">Calendar</h1>
                   <p className="text-sm text-muted-foreground">
-                    {events.length} upcoming events this month
+                    {eventsLoading
+                      ? "Loading…"
+                      : eventsError
+                        ? eventsError
+                        : `${events.length} upcoming event${events.length !== 1 ? "s" : ""} this month`}
                   </p>
                 </div>
               </div>
@@ -595,17 +529,28 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Upcoming Events List */}
+          {/* Upcoming Events List - only events created via Create Event dialog */}
           <Card className="glass border-glass-border mt-6">
             <CardHeader>
               <CardTitle>Upcoming Events</CardTitle>
-              <CardDescription>All scheduled events for this month</CardDescription>
+              <CardDescription>
+                {eventsLoading
+                  ? "Loading events…"
+                  : events.length > 0
+                    ? "Events for this month"
+                    : "Create events to see them here"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {events
-                  .sort((a: CalendarEvent, b: CalendarEvent) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                  .map((event: CalendarEvent) => {
+                {eventsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                    <p className="text-sm">Loading events…</p>
+                  </div>
+                ) : events.length > 0 ? (
+                  [...events]
+                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                  .map((event) => {
                     const EventIcon = getEventIcon(event.type)
                     const eventDate = new Date(event.date)
                     return (
@@ -670,7 +615,23 @@ export default function CalendarPage() {
                         </DropdownMenu>
                       </div>
                     )
-                  })}
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                    <CalendarIcon className="h-12 w-12 mb-3 opacity-50" />
+                    <p className="text-sm">No events yet</p>
+                    <p className="text-xs mt-1">Use &quot;Create Event&quot; to add events to your calendar</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 gap-2"
+                      onClick={() => setIsCreateDialogOpen(true)}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Create Event
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -772,11 +733,11 @@ export default function CalendarPage() {
             </Button>
             <Button
               onClick={handleCreateEvent}
-              disabled={!newEvent.title || !newEvent.date}
+              disabled={!newEvent.title || !newEvent.date || isCreating}
               className="bg-primary hover:bg-primary/90"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Create Event
+              {isCreating ? "Creating…" : "Create Event"}
             </Button>
           </DialogFooter>
         </DialogContent>
