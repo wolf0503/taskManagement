@@ -1,11 +1,19 @@
 /**
  * API Configuration
  * Central configuration for API endpoints and settings
+ * Backend runs on port 4000.
  */
 
+const rawBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
+const rawWs = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000'
+
+// Ensure port 4000 is used (override any stale 5000 from env/build)
+const baseUrl = rawBase.replace('localhost:5000', 'localhost:4000')
+const wsUrl = rawWs.replace('localhost:5000', 'localhost:4000')
+
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1',
-  WEBSOCKET_URL: process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:5001',
+  BASE_URL: baseUrl,
+  WEBSOCKET_URL: wsUrl,
   TIMEOUT: 30000, // 30 seconds
   TOKEN_REFRESH_BUFFER: 60000, // Refresh token 1 minute before expiration
 } as const
