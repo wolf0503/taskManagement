@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Grid3X3, List, Clock, CheckCircle2, Pause, FileText, X, UserPlus } from "lucide-react"
+import { Plus, Clock, CheckCircle2, Pause, FileText, X, UserPlus } from "lucide-react"
 import type { Project } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { AddTaskDialog } from "@/components/add-task-dialog"
@@ -175,19 +175,6 @@ export function Header({ project, projectId, onAddMembersClick }: HeaderProps) {
                 <span className="hidden sm:inline">Clear</span>
               </button>
             )}
-          </div>
-
-          {/* Divider */}
-          <div className="h-6 w-px bg-border hidden sm:block" />
-
-          {/* View toggles */}
-          <div className="hidden sm:flex items-center gap-1 glass-subtle rounded-lg p-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 bg-primary/20 text-primary">
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-              <List className="h-4 w-4" />
-            </Button>
           </div>
 
           {/* Add Task */}

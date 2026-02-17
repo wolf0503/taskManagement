@@ -153,3 +153,46 @@ export interface PaginationMeta {
   total: number
   totalPages: number
 }
+
+// Calendar event (user-created, stored in backend)
+export type CalendarEventType = 'meeting' | 'deadline' | 'task'
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  type: CalendarEventType
+  date: string
+  time: string
+  duration: string
+  attendees: string[]
+  location: string
+  color: string
+  project: string
+  userId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CreateCalendarEventData {
+  title: string
+  type: CalendarEventType
+  date: string
+  time?: string
+  duration?: string
+  attendees?: string[]
+  location?: string
+  color?: string
+  project?: string
+}
+
+export interface UpdateCalendarEventData {
+  title?: string
+  type?: CalendarEventType
+  date?: string
+  time?: string
+  duration?: string
+  attendees?: string[]
+  location?: string
+  color?: string
+  project?: string
+}

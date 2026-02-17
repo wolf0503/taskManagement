@@ -69,6 +69,11 @@ export const API_ENDPOINTS = {
     BASE: '/users',
     LIST: '/users',
   },
+  // Calendar events (user-created events for calendar view)
+  CALENDAR: {
+    EVENTS: '/calendar/events',
+    BY_ID: (id: string) => `/calendar/events/${id}`,
+  },
   // Health
   HEALTH: '/health',
 } as const
