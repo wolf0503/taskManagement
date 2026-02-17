@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useParams, useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
@@ -23,6 +24,23 @@ import {
   ArrowDown,
   ArrowLeft
 } from "lucide-react"
+
+const ProgressDoughnutChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.ProgressDoughnutChart })),
+  { ssr: false }
+)
+const TaskDistributionBarChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.TaskDistributionBarChart })),
+  { ssr: false }
+)
+const TimeDoughnutChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.TimeDoughnutChart })),
+  { ssr: false }
+)
+const VelocityBarChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.VelocityBarChart })),
+  { ssr: false }
+)
 
 // Mock project data
 const dashboardData: Record<string, any> = {
@@ -271,98 +289,67 @@ export default function DashboardDetailPage() {
 
         {/* Dashboard Content */}
         <div className="px-4 lg:px-8 pb-6 space-y-6">
-          {/* Progress Overview */}
+          {/* Progress Overview (Chart.js) */}
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Progress Overview</CardTitle>
               <CardDescription>Current status and completion rate</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Overall Progress</span>
-                    <span className="text-2xl font-bold text-primary">{dashboard.completionRate}%</span>
-                  </div>
-                  <div className="h-4 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full transition-all", dashboard.color)}
-                      style={{ width: `${dashboard.completionRate}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between mt-2 text-sm text-muted-foreground">
-                    <span>{dashboard.tasksCompleted} completed</span>
-                    <span>{dashboard.totalTasks - dashboard.tasksCompleted} remaining</span>
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="w-[200px] h-[200px] flex-shrink-0">
+                  <ProgressDoughnutChart
+                    completed={dashboard.tasksCompleted}
+                    total={dashboard.totalTasks}
+                    size={200}
+                  />
+                </div>
+                <div className="flex-1">
+                  <div className="text-2xl font-bold text-primary mb-1">{dashboard.completionRate}%</div>
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{dashboard.tasksCompleted}</span> completed ·{" "}
+                    <span className="font-medium text-foreground">{dashboard.totalTasks - dashboard.tasksCompleted}</span> remaining
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Task Distribution */}
+          {/* Task Distribution (Chart.js) */}
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Task Distribution</CardTitle>
               <CardDescription>Breakdown of tasks by status</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {/* To Do */}
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">To Do</span>
-                    <span className="font-bold text-status-todo">{dashboard.stats.todo} tasks</span>
-                  </div>
-                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-status-todo rounded-full transition-all"
-                      style={{ width: `${(dashboard.stats.todo / dashboard.totalTasks) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                {/* In Progress */}
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">In Progress</span>
-                    <span className="font-bold text-accent">{dashboard.stats.inProgress} tasks</span>
-                  </div>
-                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent rounded-full transition-all"
-                      style={{ width: `${(dashboard.stats.inProgress / dashboard.totalTasks) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                {/* Done */}
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Done</span>
-                    <span className="font-bold text-status-done">{dashboard.stats.done} tasks</span>
-                  </div>
-                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-status-done rounded-full transition-all"
-                      style={{ width: `${(dashboard.stats.done / dashboard.totalTasks) * 100}%` }}
-                    />
-                  </div>
-                </div>
-                {/* Blockers */}
-                {dashboard.stats.blockers > 0 && (
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <div className="h-12 w-12 rounded-lg bg-destructive/20 flex items-center justify-center">
-                      <span className="text-destructive text-xl font-bold">{dashboard.stats.blockers}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-destructive">Active Blockers</div>
-                      <div className="text-xs text-muted-foreground">These tasks need immediate attention</div>
-                    </div>
-                  </div>
-                )}
+              <div className="h-[200px] mb-4">
+                <TaskDistributionBarChart
+                  todo={dashboard.stats.todo}
+                  inProgress={dashboard.stats.inProgress}
+                  done={dashboard.stats.done}
+                  height={200}
+                />
               </div>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>To Do: <strong className="text-status-todo">{dashboard.stats.todo}</strong></span>
+                <span>In Progress: <strong className="text-accent">{dashboard.stats.inProgress}</strong></span>
+                <span>Done: <strong className="text-status-done">{dashboard.stats.done}</strong></span>
+              </div>
+              {dashboard.stats.blockers > 0 && (
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20 mt-4">
+                  <div className="h-12 w-12 rounded-lg bg-destructive/20 flex items-center justify-center">
+                    <span className="text-destructive text-xl font-bold">{dashboard.stats.blockers}</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-destructive">Active Blockers</div>
+                    <div className="text-xs text-muted-foreground">These tasks need immediate attention</div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Performance Metrics */}
+          {/* Performance Metrics (Chart.js) */}
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Performance Metrics</CardTitle>
@@ -370,52 +357,32 @@ export default function DashboardDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Time Progress Circle */}
+                {/* Time Tracking (Chart.js Doughnut) */}
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
-                  <div className="relative w-32 h-32 mb-4">
-                    <svg className="transform -rotate-90 w-32 h-32">
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="56"
-                        stroke="currentColor"
-                        strokeWidth="12"
-                        fill="transparent"
-                        className="text-secondary"
-                      />
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="56"
-                        stroke="currentColor"
-                        strokeWidth="12"
-                        fill="transparent"
-                        strokeDasharray={`${2 * Math.PI * 56}`}
-                        strokeDashoffset={`${2 * Math.PI * 56 * (1 - parseInt(dashboard.stats.timeSpent) / parseInt(dashboard.stats.estimatedTime))}`}
-                        className="text-primary transition-all"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-bold">
-                        {Math.round((parseInt(dashboard.stats.timeSpent) / parseInt(dashboard.stats.estimatedTime)) * 100)}%
-                      </span>
-                      <span className="text-xs text-muted-foreground">Used</span>
-                    </div>
+                  <div className="w-[160px] h-[160px] mb-4">
+                    <TimeDoughnutChart
+                      spent={parseInt(dashboard.stats.timeSpent) || 0}
+                      estimated={Math.max(parseInt(dashboard.stats.estimatedTime) || 1, 1)}
+                      size={160}
+                    />
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground mb-1">Time Tracking</div>
                     <div className="text-lg font-bold">{dashboard.stats.timeSpent} / {dashboard.stats.estimatedTime}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {Math.round((parseInt(dashboard.stats.timeSpent) / Math.max(parseInt(dashboard.stats.estimatedTime), 1)) * 100)}% used
+                    </div>
                   </div>
                 </div>
 
-                {/* Velocity Chart */}
+                {/* Velocity (Chart.js Bar) */}
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
-                  <div className="relative w-32 h-32 mb-4 flex items-end justify-center gap-2">
-                    <div className="w-6 h-16 bg-primary/30 rounded-t"></div>
-                    <div className="w-6 h-24 bg-primary/50 rounded-t"></div>
-                    <div className="w-6 h-32 bg-primary rounded-t"></div>
-                    <div className="w-6 h-20 bg-primary/70 rounded-t"></div>
+                  <div className="w-full h-[160px] mb-4">
+                    <VelocityBarChart
+                      labels={["W1", "W2", "W3", "W4"]}
+                      values={[2, 3, 2, 4]}
+                      height={160}
+                    />
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground mb-1">Velocity</div>

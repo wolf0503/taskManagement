@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -48,6 +49,15 @@ import {
   Download,
   Share2
 } from "lucide-react"
+
+const ProgressDoughnutChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.ProgressDoughnutChart })),
+  { ssr: false }
+)
+const ProjectsProgressBarChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.ProjectsProgressBarChart })),
+  { ssr: false }
+)
 
 // Dashboard project type
 interface DashboardProject {
@@ -316,7 +326,7 @@ export default function DashboardPage() {
     const project = projects.find((p: DashboardProject) => p.id === projectId)
     if (!project) return
     
-    const shareUrl = `${window.location.origin}/dashboard/projects/${projectId}`
+    const shareUrl = `${window.location.origin}/dashboard/${projectId}`
     navigator.clipboard.writeText(shareUrl)
     alert(`Link copied to clipboard: ${shareUrl}`)
   }
@@ -472,7 +482,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {/* Overall Progress */}
+          {/* Overall Progress (Chart.js) */}
           <Card className="glass border-glass-border mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -484,15 +494,33 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="h-4 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
-                  style={{ width: `${overallCompletion}%` }}
-                />
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="w-[200px] h-[200px] flex-shrink-0">
+                  <ProgressDoughnutChart completed={completedTasks} total={totalTasks} size={200} />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{completedTasks}</span> completed ·{" "}
+                    <span className="font-medium text-foreground">{totalTasks - completedTasks}</span> remaining
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between mt-2 text-sm text-muted-foreground">
-                <span>{completedTasks} completed</span>
-                <span>{totalTasks - completedTasks} remaining</span>
+            </CardContent>
+          </Card>
+
+          {/* Progress by project (Chart.js) */}
+          <Card className="glass border-glass-border mb-6">
+            <CardHeader>
+              <CardTitle>Progress by project</CardTitle>
+              <CardDescription>Completion rate per project (Chart.js)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[220px]">
+                <ProjectsProgressBarChart
+                  projectNames={projects.map((p: DashboardProject) => p.name)}
+                  completionRates={projects.map((p: DashboardProject) => p.completionRate)}
+                  height={220}
+                />
               </div>
             </CardContent>
           </Card>
@@ -519,7 +547,7 @@ export default function DashboardPage() {
                   <Card 
                     key={project.id} 
                     className="glass border-glass-border hover:border-primary/50 transition-all group cursor-pointer"
-                    onClick={() => router.push(`/dashboard/projects/${project.id}`)}
+                    onClick={() => router.push(`/dashboard/${project.id}`)}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
