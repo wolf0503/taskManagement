@@ -257,3 +257,61 @@ export function ProjectsProgressBarChart({
     </div>
   )
 }
+
+/** Time logged by project (grouped bar: Logged vs Estimated hours) */
+export function TimeLoggedByProjectChart({
+  projectNames,
+  loggedHours,
+  estimatedHours,
+  height = 260,
+}: {
+  projectNames: string[]
+  loggedHours: number[]
+  estimatedHours: number[]
+  height?: number
+}) {
+  const data = {
+    labels: projectNames,
+    datasets: [
+      {
+        label: "Logged (h)",
+        data: loggedHours,
+        backgroundColor: defaultColors.primary,
+        borderRadius: 6,
+      },
+      {
+        label: "Estimated (h)",
+        data: estimatedHours,
+        backgroundColor: defaultColors.muted,
+        borderRadius: 6,
+      },
+    ],
+  }
+  return (
+    <div style={{ height }}>
+      <Bar
+        data={data}
+        options={{
+          ...chartOptions,
+          scales: {
+            x: { grid: { display: false } },
+            y: {
+              beginAtZero: true,
+              grid: { color: "rgba(255,255,255,0.06)" },
+              ticks: { callback: (v) => (typeof v === "number" ? `${v}h` : v) },
+            },
+          },
+          plugins: {
+            ...chartOptions.plugins,
+            legend: { position: "top" as const },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.raw}h`,
+              },
+            },
+          },
+        }}
+      />
+    </div>
+  )
+}

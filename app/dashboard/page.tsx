@@ -7,7 +7,6 @@ import { Sidebar } from "@/components/sidebar"
 import { ProtectedRoute } from "@/components/protected-route"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -31,23 +30,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   BarChart3,
-  TrendingUp, 
-  Users, 
-  CheckCircle2, 
-  Clock, 
+  Users,
+  CheckCircle2,
+  Clock,
   FolderKanban,
   MessageSquare,
   Activity,
-  ArrowUp,
-  ArrowDown,
-  Calendar,
   Plus,
   MoreVertical,
   Edit,
   Trash2,
   Copy,
   Download,
-  Share2
+  Share2,
 } from "lucide-react"
 
 const ProgressDoughnutChart = dynamic(
@@ -56,6 +51,10 @@ const ProgressDoughnutChart = dynamic(
 )
 const ProjectsProgressBarChart = dynamic(
   () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.ProjectsProgressBarChart })),
+  { ssr: false }
+)
+const TimeLoggedByProjectChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.TimeLoggedByProjectChart })),
   { ssr: false }
 )
 
@@ -374,45 +373,53 @@ export default function DashboardPage() {
     }
   }
 
-  // Overall statistics
-  const overallStats = [
-    {
-      title: "Total Projects",
-      value: String(projects.length),
-      icon: FolderKanban,
-      trend: "+2 this month",
-      color: "text-chart-1",
-      bgColor: "bg-chart-1/10",
-    },
-    {
-      title: "Active Tasks",
-      value: "25",
-      icon: Clock,
-      trend: "+12 this week",
-      color: "text-accent",
-      bgColor: "bg-accent/10",
-    },
-    {
-      title: "Completed Tasks",
-      value: "25",
-      icon: CheckCircle2,
-      trend: "+15 this week",
-      color: "text-status-done",
-      bgColor: "bg-status-done/10",
-    },
-    {
-      title: "Team Members",
-      value: "4",
-      icon: Users,
-      trend: "Active now",
-      color: "text-chart-3",
-      bgColor: "bg-chart-3/10",
-    },
-  ]
-
+  // Derived metrics from actual project data
   const totalTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.totalTasks, 0)
   const completedTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.tasksCompleted, 0)
+  const activeTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.stats.inProgress, 0)
+  const todoTasks = projects.reduce((sum: number, p: DashboardProject) => sum + p.stats.todo, 0)
+  const totalMembers = projects.reduce((sum: number, p: DashboardProject) => sum + p.activeMembers, 0)
+  const projectsCompleted = projects.filter((p: DashboardProject) => p.completionRate === 100).length
   const overallCompletion = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+  const overallStats = [
+    {
+      title: "Projects",
+      value: String(projects.length),
+      detail: projectsCompleted > 0 ? `${projectsCompleted} completed` : "in progress",
+      icon: FolderKanban,
+      color: "text-chart-1",
+      bgColor: "bg-chart-1/15",
+      borderColor: "border-chart-1/30",
+    },
+    {
+      title: "Active now",
+      value: String(activeTasks),
+      detail: "tasks in progress",
+      icon: Clock,
+      color: "text-accent",
+      bgColor: "bg-accent/15",
+      borderColor: "border-accent/30",
+    },
+    {
+      title: "Completed",
+      value: String(completedTasks),
+      detail: `of ${totalTasks} total tasks`,
+      icon: CheckCircle2,
+      color: "text-status-done",
+      bgColor: "bg-status-done/15",
+      borderColor: "border-status-done/30",
+    },
+    {
+      title: "Team",
+      value: String(totalMembers),
+      detail: "members across projects",
+      icon: Users,
+      color: "text-chart-3",
+      bgColor: "bg-chart-3/15",
+      borderColor: "border-chart-3/30",
+    },
+  ]
 
   return (
     <ProtectedRoute>
@@ -460,61 +467,69 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Overall Stats Grid */}
+        {/* Overall Stats Grid — modern cards with concrete data */}
         <div className="px-4 lg:px-8 pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {overallStats.map((stat) => (
-              <Card key={stat.title} className="glass border-glass-border">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", stat.bgColor)}>
-                    <stat.icon className={cn("h-5 w-5", stat.color)} />
+              <div
+                key={stat.title}
+                className={cn(
+                  "relative overflow-hidden rounded-2xl border bg-card/80 backdrop-blur-xl transition-all hover:bg-card/90",
+                  "min-h-[100px] p-5 flex flex-col justify-between",
+                  stat.borderColor
+                )}
+              >
+                <div className="flex items-start justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {stat.title}
+                  </span>
+                  <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center", stat.bgColor)}>
+                    <stat.icon className={cn("h-4 w-4", stat.color)} />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3 text-status-done" />
-                    {stat.trend}
-                  </p>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="mt-2">
+                  <div className={cn("text-2xl sm:text-3xl font-bold tabular-nums", stat.color)}>
+                    {stat.value}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{stat.detail}</p>
+                </div>
+              </div>
             ))}
           </div>
 
-          {/* Overall Progress (Chart.js) */}
-          <Card className="glass border-glass-border mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Overall Progress</CardTitle>
-                  <CardDescription>Combined progress across all projects</CardDescription>
-                </div>
-                <div className="text-2xl font-bold text-primary">{overallCompletion}%</div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row items-center gap-6">
-                <div className="w-[200px] h-[200px] flex-shrink-0">
+          {/* Overall Progress — Chart.js with clear numbers */}
+          <div className="rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden mb-6">
+            <div className="p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                <div className="w-[200px] h-[200px] flex-shrink-0 mx-auto sm:mx-0">
                   <ProgressDoughnutChart completed={completedTasks} total={totalTasks} size={200} />
                 </div>
-                <div className="flex-1 text-center sm:text-left">
-                  <div className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{completedTasks}</span> completed ·{" "}
-                    <span className="font-medium text-foreground">{totalTasks - completedTasks}</span> remaining
-                  </div>
+                <div className="flex-1 text-center sm:text-left space-y-2">
+                  <div className="text-4xl font-bold text-primary tabular-nums">{overallCompletion}%</div>
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-semibold text-foreground">{completedTasks}</span> of{" "}
+                    <span className="font-semibold text-foreground">{totalTasks}</span> tasks completed
+                    {todoTasks > 0 && (
+                      <> · <span className="font-medium text-foreground">{todoTasks}</span> to do</>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Across {projects.length} project{projects.length !== 1 ? "s" : ""}
+                  </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Progress by project (Chart.js) */}
-          <Card className="glass border-glass-border mb-6">
-            <CardHeader>
-              <CardTitle>Progress by project</CardTitle>
-              <CardDescription>Completion rate per project (Chart.js)</CardDescription>
-            </CardHeader>
-            <CardContent>
+          {/* Progress by project — Chart.js */}
+          <div className="rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden mb-6">
+            <div className="p-6 border-b border-border/50">
+              <h3 className="text-lg font-semibold">Progress by project</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Completion % per project
+              </p>
+            </div>
+            <div className="p-6 pt-4">
               <div className="h-[220px]">
                 <ProjectsProgressBarChart
                   projectNames={projects.map((p: DashboardProject) => p.name)}
@@ -522,132 +537,150 @@ export default function DashboardPage() {
                   height={220}
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
+          {/* Time logged (Log time) — Chart.js */}
+          <div className="rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden mb-6">
+            <div className="p-6 border-b border-border/50">
+              <h3 className="text-lg font-semibold">Time logged</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Logged vs estimated hours per project
+              </p>
+            </div>
+            <div className="p-6 pt-4">
+              <div className="h-[260px]">
+                <TimeLoggedByProjectChart
+                  projectNames={projects.map((p: DashboardProject) => p.name)}
+                  loggedHours={projects.map((p: DashboardProject) => parseInt(p.stats.timeSpent, 10) || 0)}
+                  estimatedHours={projects.map((p: DashboardProject) => parseInt(p.stats.estimatedTime, 10) || 0)}
+                  height={260}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Project Dashboards */}
           <div className="mb-6">
-            <div className="flex items-center justify-between px-2 mb-4">
-              <h2 className="text-xl font-bold">Project Dashboards</h2>
+            <div className="flex items-center justify-between px-1 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold">Project dashboards</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Click to open metrics and charts
+                </p>
+              </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-1 text-xs">
                   <Activity className="h-3 w-3" />
-                  Live Data
-                </Badge>
-                <Badge variant="outline" className="gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Updated now
+                  {projects.length} dashboard{projects.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
             </div>
 
-            {/* Dashboards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {projects.map((project: DashboardProject) => (
-                  <Card 
-                    key={project.id} 
-                    className="glass border-glass-border hover:border-primary/50 transition-all group cursor-pointer"
-                    onClick={() => router.push(`/dashboard/${project.id}`)}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", project.color)}>
-                            <FolderKanban className="h-6 w-6 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base truncate">{project.name}</CardTitle>
-                            <div className="flex items-center gap-2 mt-1">
-                              {project.completionRate === 100 && (
-                                <Badge variant="outline" className="bg-status-done/10 text-status-done border-status-done/30 text-xs">
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Done
-                                </Badge>
-                              )}
-                              <span className="text-xs text-muted-foreground">{project.lastActivity}</span>
-                            </div>
-                          </div>
+              {projects.map((project: DashboardProject) => (
+                <div
+                  key={project.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/dashboard/${project.id}`)}
+                  onKeyDown={(e) => e.key === "Enter" && router.push(`/dashboard/${project.id}`)}
+                  className={cn(
+                    "group rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden",
+                    "hover:border-primary/40 hover:bg-card/80 transition-all cursor-pointer",
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  )}
+                >
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0", project.color)}>
+                          <FolderKanban className="h-5 w-5 text-white" />
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass border-glass-border w-48">
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project.id); }}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit Dashboard
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateDashboard(project.id); }}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareDashboard(project.id); }}>
-                              <Share2 className="h-4 w-4 mr-2" />
-                              Share
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExportData(project.id); }}>
-                              <Download className="h-4 w-4 mr-2" />
-                              Export Data
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteDashboard(project.id); }}>
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete Dashboard
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {/* Progress */}
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="text-muted-foreground">Progress</span>
-                          <span className="font-bold">{project.completionRate}%</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className={cn("h-full rounded-full transition-all", project.color)}
-                            style={{ width: `${project.completionRate}%` }}
-                          />
+                        <div className="min-w-0">
+                          <h3 className="font-semibold truncate">{project.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                            <Clock className="h-3 w-3" />
+                            {project.lastActivity}
+                            {project.activeMembers > 0 && (
+                              <>
+                                <span className="text-border">·</span>
+                                <Users className="h-3 w-3" />
+                                {project.activeMembers} member{project.activeMembers !== 1 ? "s" : ""}
+                              </>
+                            )}
+                          </p>
                         </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="glass border-glass-border w-48">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project.id); }}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit Dashboard
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateDashboard(project.id); }}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareDashboard(project.id); }}>
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Share
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleExportData(project.id); }}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Export Data
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteDashboard(project.id); }}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Dashboard
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
 
-                      {/* Quick Stats */}
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="text-center p-2 rounded-lg glass-subtle">
-                          <div className="text-xs text-muted-foreground">To Do</div>
-                          <div className="text-lg font-bold text-status-todo">{project.stats.todo}</div>
-                        </div>
-                        <div className="text-center p-2 rounded-lg glass-subtle">
-                          <div className="text-xs text-muted-foreground">Active</div>
-                          <div className="text-lg font-bold text-accent">{project.stats.inProgress}</div>
-                        </div>
-                        <div className="text-center p-2 rounded-lg glass-subtle">
-                          <div className="text-xs text-muted-foreground">Done</div>
-                          <div className="text-lg font-bold text-status-done">{project.stats.done}</div>
-                        </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-bold tabular-nums text-primary">{project.completionRate}%</span>
+                        <span className="text-sm text-muted-foreground">
+                          {project.tasksCompleted} / {project.totalTasks} tasks
+                        </span>
                       </div>
+                      {project.completionRate === 100 && (
+                        <Badge variant="outline" className="bg-status-done/10 text-status-done border-status-done/30 text-xs">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Done
+                        </Badge>
+                      )}
+                    </div>
 
-                      {/* Team & Trend */}
-                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">{project.activeMembers} members</span>
-                        </div>
-                        <div className={cn(
-                          "flex items-center gap-1 text-xs font-medium",
-                          project.trendUp ? "text-status-done" : "text-destructive"
-                        )}>
-                          {project.trendUp ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                          {project.trend}
-                        </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+                        <div className="text-sm font-semibold text-status-todo tabular-nums">{project.stats.todo}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">To do</div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+                        <div className="text-sm font-semibold text-accent tabular-nums">{project.stats.inProgress}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Active</div>
+                      </div>
+                      <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+                        <div className="text-sm font-semibold text-status-done tabular-nums">{project.stats.done}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Done</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{project.stats.velocity}</span>
+                      <span>{project.stats.timeSpent}h / {project.stats.estimatedTime}h</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

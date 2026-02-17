@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { useParams, useRouter } from "next/navigation"
+import { toast } from "@/hooks/use-toast"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
@@ -11,6 +12,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -22,7 +33,8 @@ import {
   Activity,
   ArrowUp,
   ArrowDown,
-  ArrowLeft
+  ArrowLeft,
+  Heart,
 } from "lucide-react"
 
 const ProgressDoughnutChart = dynamic(
@@ -176,6 +188,15 @@ export default function DashboardDetailPage() {
   const [dashboard, setDashboard] = useState<any>(null)
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<any[]>([])
+  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
+  const [statusUpdateText, setStatusUpdateText] = useState("")
+  const [logTimeOpen, setLogTimeOpen] = useState(false)
+  const [logTimeHours, setLogTimeHours] = useState("")
+  const [logTimeNote, setLogTimeNote] = useState("")
+  const [likedComments, setLikedComments] = useState<Set<number>>(new Set())
+  const [replyingTo, setReplyingTo] = useState<number | null>(null)
+  const [replyText, setReplyText] = useState("")
+  const [replies, setReplies] = useState<Record<number, Array<{ user: string; text: string; time: string }>>>({})
 
   useEffect(() => {
     const foundDashboard = dashboardData[dashboardId]
@@ -201,6 +222,67 @@ export default function DashboardDetailPage() {
 
     setComments([newComment, ...comments])
     setCommentText("")
+    toast({ title: "Comment posted" })
+  }
+
+  const handleStatusUpdate = () => {
+    const text = statusUpdateText.trim()
+    if (!text) return
+    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
+    const newComment = {
+      user: displayName,
+      avatar: user?.avatar ?? "/professional-avatar.png",
+      text: `[Status] ${text}`,
+      time: "Just now"
+    }
+    setComments([newComment, ...comments])
+    setStatusUpdateText("")
+    setStatusUpdateOpen(false)
+    toast({ title: "Status update posted" })
+  }
+
+  const handleLogTime = () => {
+    const hours = logTimeHours.trim()
+    if (!hours || isNaN(Number(hours)) || Number(hours) <= 0) {
+      toast({ title: "Enter valid hours", variant: "destructive" })
+      return
+    }
+    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
+    const note = logTimeNote.trim()
+    const newComment = {
+      user: displayName,
+      avatar: user?.avatar ?? "/professional-avatar.png",
+      text: `[Time logged] ${hours}h${note ? ` — ${note}` : ""}`,
+      time: "Just now"
+    }
+    setComments([newComment, ...comments])
+    setLogTimeHours("")
+    setLogTimeNote("")
+    setLogTimeOpen(false)
+    toast({ title: `${hours}h logged` })
+  }
+
+  const handleLike = (commentIdx: number) => {
+    setLikedComments((prev) => {
+      const next = new Set(prev)
+      if (next.has(commentIdx)) next.delete(commentIdx)
+      else next.add(commentIdx)
+      return next
+    })
+  }
+
+  const handleReplySubmit = (commentIdx: number) => {
+    const text = replyText.trim()
+    if (!text) return
+    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
+    const newReply = { user: displayName, text, time: "Just now" }
+    setReplies((prev) => ({
+      ...prev,
+      [commentIdx]: [...(prev[commentIdx] || []), newReply],
+    }))
+    setReplyText("")
+    setReplyingTo(null)
+    toast({ title: "Reply posted" })
   }
 
   if (!dashboard) {
@@ -436,11 +518,11 @@ export default function DashboardDetailPage() {
                     />
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => setStatusUpdateOpen(true)}>
                           <Activity className="h-4 w-4 mr-2" />
                           Status Update
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => setLogTimeOpen(true)}>
                           <Clock className="h-4 w-4 mr-2" />
                           Log Time
                         </Button>
@@ -476,15 +558,62 @@ export default function DashboardDetailPage() {
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">{comment.text}</p>
                         <div className="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
-                            <TrendingUp className="h-4 w-4" />
-                            Like
+                          <button
+                            type="button"
+                            onClick={() => handleLike(idx)}
+                            className={cn(
+                              "text-sm flex items-center gap-1 rounded-md px-2 py-1 transition-colors",
+                              likedComments.has(idx)
+                                ? "text-destructive hover:text-destructive/80"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {likedComments.has(idx) ? (
+                              <Heart className="h-4 w-4 fill-current" />
+                            ) : (
+                              <Heart className="h-4 w-4" />
+                            )}
+                            Like{likedComments.has(idx) ? "d" : ""}
                           </button>
-                          <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setReplyingTo(replyingTo === idx ? null : idx)}
+                            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md px-2 py-1"
+                          >
                             <MessageSquare className="h-4 w-4" />
                             Reply
                           </button>
                         </div>
+                        {replyingTo === idx && (
+                          <div className="mt-3 flex gap-2">
+                            <Textarea
+                              placeholder={`Reply to ${comment.user}...`}
+                              className="min-h-[60px] flex-1"
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              autoFocus
+                            />
+                            <div className="flex flex-col gap-1">
+                              <Button size="sm" onClick={() => handleReplySubmit(idx)} disabled={!replyText.trim()}>
+                                Send
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        {(replies[idx]?.length ?? 0) > 0 && (
+                          <div className="mt-3 ml-4 space-y-2 border-l-2 border-border pl-4">
+                            {replies[idx].map((r, ri) => (
+                              <div key={ri} className="text-sm">
+                                <span className="font-medium text-foreground">{r.user}</span>
+                                <span className="text-muted-foreground ml-2 text-xs">{r.time}</span>
+                                <p className="text-muted-foreground mt-0.5">{r.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -494,6 +623,75 @@ export default function DashboardDetailPage() {
           </Card>
         </div>
       </main>
+
+      {/* Status Update Dialog */}
+      <Dialog open={statusUpdateOpen} onOpenChange={setStatusUpdateOpen}>
+        <DialogContent className="border-glass-border sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Status Update</DialogTitle>
+            <DialogDescription>Share a quick status update for the team</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="status-text">Update</Label>
+              <Textarea
+                id="status-text"
+                placeholder="e.g. Completed API integration, starting frontend..."
+                className="min-h-[100px]"
+                value={statusUpdateText}
+                onChange={(e) => setStatusUpdateText(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStatusUpdateOpen(false)}>Cancel</Button>
+            <Button onClick={handleStatusUpdate} disabled={!statusUpdateText.trim()}>
+              <Activity className="h-4 w-4 mr-2" />
+              Post Update
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log Time Dialog */}
+      <Dialog open={logTimeOpen} onOpenChange={setLogTimeOpen}>
+        <DialogContent className="border-glass-border sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Log Time</DialogTitle>
+            <DialogDescription>Log hours spent on this project</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="log-hours">Hours</Label>
+              <Input
+                id="log-hours"
+                type="number"
+                min="0.5"
+                step="0.5"
+                placeholder="e.g. 2.5"
+                value={logTimeHours}
+                onChange={(e) => setLogTimeHours(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="log-note">Note (optional)</Label>
+              <Input
+                id="log-note"
+                placeholder="e.g. API integration"
+                value={logTimeNote}
+                onChange={(e) => setLogTimeNote(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLogTimeOpen(false)}>Cancel</Button>
+            <Button onClick={handleLogTime} disabled={!logTimeHours.trim()}>
+              <Clock className="h-4 w-4 mr-2" />
+              Log Time
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
