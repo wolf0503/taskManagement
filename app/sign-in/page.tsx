@@ -71,7 +71,14 @@ export default function SignInPage() {
           {error && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                <span className="block">{error}</span>
+                {error.toLowerCase().includes("too many") && (
+                  <span className="mt-2 block text-sm opacity-90">
+                    Wait a few minutes, then try once. If you run the backend locally, you can relax or disable the auth rate limit for development.
+                  </span>
+                )}
+              </AlertDescription>
             </Alert>
           )}
           
@@ -140,7 +147,7 @@ export default function SignInPage() {
               <Button
                 type="submit"
                 className="w-full gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-                disabled={isLoading}
+                disabled={isLoading || form.formState.isSubmitting}
               >
                 {isLoading ? (
                   <>

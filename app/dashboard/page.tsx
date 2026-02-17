@@ -1,12 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { ProtectedRoute } from "@/components/protected-route"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { useProjects } from "@/contexts/projects-context"
+import { useTasks } from "@/contexts/tasks-context"
+import { useColumns } from "@/contexts/columns-context"
+import { projectsService } from "@/services/projects.service"
+import type { Project, ProjectStats } from "@/lib/types"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,11 +63,13 @@ const TimeLoggedByProjectChart = dynamic(
   { ssr: false }
 )
 
-// Dashboard project type
+// Dashboard project type (for display; built from Project + stats)
 interface DashboardProject {
   id: string
   name: string
   color: string
+  status?: string
+  statusLabel?: string
   completionRate: number
   tasksCompleted: number
   totalTasks: number
@@ -88,163 +95,192 @@ interface DashboardProject {
   }>
 }
 
-// Mock project statistics
-const projectStats: DashboardProject[] = [
-  {
-    id: "1",
-    name: "Website Redesign",
-    color: "bg-chart-1",
-    completionRate: 25,
-    tasksCompleted: 2,
-    totalTasks: 8,
-    activeMembers: 4,
-    trend: "+12%",
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
+  ON_HOLD: "On Hold",
+  PLANNING: "Planning",
+}
+
+const CHART_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
+
+/** Run async tasks with a concurrency limit to avoid rate limiting (e.g. 429). */
+async function runWithConcurrencyLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let index = 0
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      const i = index++
+      try {
+        results[i] = await fn(items[i])
+      } catch {
+        results[i] = undefined as unknown as R
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
+function formatLastActivity(updatedAt?: string | null): string {
+  if (!updatedAt) return "—"
+  try {
+    const d = new Date(updatedAt)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString()
+  } catch {
+    return "—"
+  }
+}
+
+// Stats computed from tasks/columns when API stats are unavailable
+interface ClientProjectStats {
+  totalTasks: number
+  completedTasks: number
+  todoTasks: number
+  inProgressTasks: number
+}
+
+function mapProjectToDashboard(
+  project: Project,
+  stats: ProjectStats | null,
+  memberCount: number,
+  clientStats: ClientProjectStats | null = null
+): DashboardProject {
+  const totalTasks = stats?.totalTasks ?? clientStats?.totalTasks ?? project.taskCount ?? 0
+  const completedTasks = stats?.completedTasks ?? clientStats?.completedTasks ?? project.completedTasks ?? 0
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+  const color = project.color && project.color.startsWith("bg-") ? project.color : CHART_COLORS[0]
+  return {
+    id: project.id,
+    name: project.name,
+    color,
+    status: project.status,
+    statusLabel: PROJECT_STATUS_LABELS[project.status] ?? project.status,
+    completionRate,
+    tasksCompleted: completedTasks,
+    totalTasks,
+    activeMembers: memberCount,
+    trend: completionRate > 0 ? `+${completionRate}%` : "0%",
     trendUp: true,
-    lastActivity: "2 hours ago",
+    lastActivity: formatLastActivity(project.updatedAt),
+    description: project.description,
     stats: {
-      todo: 3,
-      inProgress: 3,
-      done: 2,
-      velocity: "2.5 tasks/week",
-      timeSpent: "32h",
-      estimatedTime: "120h",
-      blockers: 0,
+      todo: stats?.todoTasks ?? clientStats?.todoTasks ?? Math.max(0, totalTasks - completedTasks),
+      inProgress: stats?.inProgressTasks ?? clientStats?.inProgressTasks ?? 0,
+      done: stats?.completedTasks ?? clientStats?.completedTasks ?? completedTasks,
+      velocity: "—",
+      timeSpent: "0",
+      estimatedTime: "0",
+      blockers: stats?.overdueTasks ?? 0,
     },
-    recentComments: [
-      { user: "Alice", avatar: "/professional-woman.png", text: "UI mockups are ready for review", time: "2h ago" },
-      { user: "Bob", avatar: "/professional-man.png", text: "Working on responsive design", time: "4h ago" },
-    ]
-  },
-  {
-    id: "2",
-    name: "Mobile App",
-    color: "bg-chart-2",
-    completionRate: 42,
-    tasksCompleted: 5,
-    totalTasks: 12,
-    activeMembers: 2,
-    trend: "+8%",
-    trendUp: true,
-    lastActivity: "1 hour ago",
-    stats: {
-      todo: 4,
-      inProgress: 3,
-      done: 5,
-      velocity: "1.5 tasks/week",
-      timeSpent: "58h",
-      estimatedTime: "140h",
-      blockers: 1,
-    },
-    recentComments: [
-      { user: "Alice", avatar: "/professional-woman.png", text: "API integration completed", time: "1h ago" },
-    ]
-  },
-  {
-    id: "3",
-    name: "Marketing Campaign",
-    color: "bg-chart-3",
-    completionRate: 0,
-    tasksCompleted: 0,
-    totalTasks: 6,
-    activeMembers: 1,
-    trend: "0%",
-    trendUp: true,
-    lastActivity: "1 day ago",
-    stats: {
-      todo: 6,
-      inProgress: 0,
-      done: 0,
-      velocity: "0 tasks/week",
-      timeSpent: "0h",
-      estimatedTime: "80h",
-      blockers: 0,
-    },
-    recentComments: [
-      { user: "Carol", avatar: "/woman-developer.png", text: "Planning phase in progress", time: "1d ago" },
-    ]
-  },
-  {
-    id: "4",
-    name: "API Development",
-    color: "bg-chart-4",
-    completionRate: 100,
-    tasksCompleted: 15,
-    totalTasks: 15,
-    activeMembers: 2,
-    trend: "+100%",
-    trendUp: true,
-    lastActivity: "Completed",
-    stats: {
-      todo: 0,
-      inProgress: 0,
-      done: 15,
-      velocity: "3 tasks/week",
-      timeSpent: "180h",
-      estimatedTime: "180h",
-      blockers: 0,
-    },
-    recentComments: [
-      { user: "David", avatar: "/man-designer.png", text: "Documentation complete", time: "2d ago" },
-    ]
-  },
-  {
-    id: "5",
-    name: "Database Migration",
-    color: "bg-chart-5",
-    completionRate: 30,
-    tasksCompleted: 3,
-    totalTasks: 10,
-    activeMembers: 2,
-    trend: "-5%",
-    trendUp: false,
-    lastActivity: "5 hours ago",
-    stats: {
-      todo: 4,
-      inProgress: 3,
-      done: 3,
-      velocity: "1 task/week",
-      timeSpent: "45h",
-      estimatedTime: "150h",
-      blockers: 2,
-    },
-    recentComments: [
-      { user: "Bob", avatar: "/professional-man.png", text: "Migration scripts ready", time: "5h ago" },
-    ]
-  },
-]
+    recentComments: [],
+  }
+}
 
 export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { projects: apiProjects, isLoading: projectsLoading, updateProject, deleteProject } = useProjects()
+  const { getTasks } = useTasks()
+  const { getColumns } = useColumns()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<string | null>(null)
-  const [projects, setProjects] = useState(() => {
-    // Load from localStorage on initial render
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dashboardProjects')
-      return saved ? JSON.parse(saved) : projectStats
-    }
-    return projectStats
-  })
-  const [newDashboardName, setNewDashboardName] = useState("")
-  const [newDashboardDescription, setNewDashboardDescription] = useState("")
+  const [statsByProjectId, setStatsByProjectId] = useState<Record<string, ProjectStats>>({})
+  const [memberCountByProjectId, setMemberCountByProjectId] = useState<Record<string, number>>({})
   const [editDashboardName, setEditDashboardName] = useState("")
   const [editDashboardDescription, setEditDashboardDescription] = useState("")
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({})
-  const [projectComments, setProjectComments] = useState<Record<string, any[]>>(
-    projectStats.reduce((acc, project) => ({
-      ...acc,
-      [project.id]: project.recentComments
-    }), {})
-  )
+  const [projectComments, setProjectComments] = useState<Record<string, any[]>>({})
 
-  // Save to localStorage whenever projects change
+  // Load stats and member counts for each project (with concurrency limit to avoid 429 rate limiting)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dashboardProjects', JSON.stringify(projects))
+    if (apiProjects.length === 0) {
+      setStatsByProjectId({})
+      setMemberCountByProjectId({})
+      return
     }
-  }, [projects])
+    let cancelled = false
+    const load = async () => {
+      const stats: Record<string, ProjectStats> = {}
+      const members: Record<string, number> = {}
+      await runWithConcurrencyLimit(apiProjects, 2, async (project) => {
+        if (cancelled) return
+        try {
+          const [s, m] = await Promise.all([
+            projectsService.getProjectStats(project.id).catch(() => null),
+            projectsService.getProjectMembers(project.id).then((list) => list.length).catch(() => 0),
+          ])
+          if (!cancelled) {
+            if (s) stats[project.id] = s
+            members[project.id] = typeof m === "number" ? m : 0
+          }
+        } catch {
+          if (!cancelled) members[project.id] = 0
+        }
+      })
+      if (!cancelled) {
+        setStatsByProjectId(stats)
+        setMemberCountByProjectId(members)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [apiProjects])
+
+  // Statistics from tasks/columns (fallback when API stats missing or to reflect current task data)
+  const clientStatsByProjectId = useMemo<Record<string, ClientProjectStats>>(() => {
+    const out: Record<string, ClientProjectStats> = {}
+    for (const project of apiProjects) {
+      const tasks = getTasks(project.id)
+      const columns = getColumns(project.id)
+      const doneCol = columns.find((c) => c.title.toLowerCase().includes("done"))
+      const todoCols = columns.filter((c) => /to\s*do|todo/.test(c.title.toLowerCase()))
+      const progressCols = columns.filter((c) => c.title.toLowerCase().includes("progress"))
+      const totalTasks = tasks.length
+      const completedTasks = doneCol ? tasks.filter((t) => t.columnId === doneCol.id).length : 0
+      const todoTasks = todoCols.length
+        ? tasks.filter((t) => todoCols.some((c) => c.id === t.columnId)).length
+        : Math.max(0, totalTasks - completedTasks)
+      const inProgressTasks = progressCols.length
+        ? tasks.filter((t) => progressCols.some((c) => c.id === t.columnId)).length
+        : 0
+      out[project.id] = {
+        totalTasks,
+        completedTasks,
+        todoTasks,
+        inProgressTasks,
+      }
+    }
+    return out
+  }, [apiProjects, getTasks, getColumns])
+
+  // Map API projects + stats to dashboard display shape (API stats preferred, then client stats from tasks/columns)
+  const projects = useMemo<DashboardProject[]>(() => {
+    return apiProjects.map((project) =>
+      mapProjectToDashboard(
+        project,
+        statsByProjectId[project.id] ?? null,
+        memberCountByProjectId[project.id] ?? 0,
+        clientStatsByProjectId[project.id] ?? null
+      )
+    )
+  }, [apiProjects, statsByProjectId, memberCountByProjectId, clientStatsByProjectId])
 
   const handlePostComment = (projectId: string) => {
     const commentText = commentTexts[projectId]?.trim()
@@ -270,55 +306,21 @@ export default function DashboardPage() {
   }
 
   const handleCreateDashboard = () => {
-    if (!newDashboardName.trim()) return
-
-    const colors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
-    const newDashboard = {
-      id: String(projects.length + 1),
-      name: newDashboardName,
-      description: newDashboardDescription,
-      color: colors[projects.length % colors.length],
-      completionRate: 0,
-      tasksCompleted: 0,
-      totalTasks: 0,
-      activeMembers: 1,
-      trend: "0%",
-      trendUp: true,
-      lastActivity: "Just now",
-      stats: {
-        todo: 0,
-        inProgress: 0,
-        done: 0,
-        velocity: "0 tasks/week",
-        timeSpent: "0h",
-        estimatedTime: "0h",
-        blockers: 0,
-      },
-      recentComments: []
-    }
-
-    setProjects([...projects, newDashboard])
-    setNewDashboardName("")
-    setNewDashboardDescription("")
     setCreateDashboardOpen(false)
+    router.push("/projects")
   }
 
   const handleDuplicateDashboard = (projectId: string) => {
-    const projectToDuplicate = projects.find((p: DashboardProject) => p.id === projectId)
-    if (!projectToDuplicate) return
-
-    const newDashboard = {
-      ...projectToDuplicate,
-      id: String(projects.length + 1),
-      name: `${projectToDuplicate.name} (Copy)`,
-      lastActivity: "Just now"
-    }
-
-    setProjects([...projects, newDashboard])
+    router.push(`/projects?duplicate=${projectId}`)
   }
 
-  const handleDeleteDashboard = (projectId: string) => {
-    setProjects(projects.filter((p: DashboardProject) => p.id !== projectId))
+  const handleDeleteDashboard = async (projectId: string) => {
+    if (!confirm("Delete this project? This cannot be undone.")) return
+    try {
+      await deleteProject(projectId)
+    } catch {
+      // Error already handled in context
+    }
   }
 
   const handleShareDashboard = (projectId: string) => {
@@ -346,22 +348,19 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleEditDashboard = () => {
+  const handleEditDashboard = async () => {
     if (!editingProject || !editDashboardName.trim()) return
-
-    setProjects(projects.map((p: DashboardProject) => 
-      p.id === editingProject 
-        ? { 
-            ...p, 
-            name: editDashboardName,
-            description: editDashboardDescription 
-          }
-        : p
-    ))
-    
-    setEditingProject(null)
-    setEditDashboardName("")
-    setEditDashboardDescription("")
+    try {
+      await updateProject(editingProject, {
+        name: editDashboardName,
+        description: editDashboardDescription,
+      })
+      setEditingProject(null)
+      setEditDashboardName("")
+      setEditDashboardDescription("")
+    } catch {
+      // Error handled in context
+    }
   }
 
   const openEditDialog = (projectId: string) => {
@@ -461,13 +460,43 @@ export default function DashboardPage() {
               </div>
               <Button className="gap-2" onClick={() => setCreateDashboardOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Create Dashboard
+                New Project
               </Button>
             </div>
           </div>
         </div>
 
+        {/* Loading state */}
+        {projectsLoading && apiProjects.length === 0 && (
+          <div className="px-4 lg:px-8 pb-6 flex items-center justify-center min-h-[200px]">
+            <div className="text-center">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading projects...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!projectsLoading && apiProjects.length === 0 && (
+          <div className="px-4 lg:px-8 pb-6 flex items-center justify-center min-h-[280px]">
+            <div className="text-center max-w-md">
+              <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+                <FolderKanban className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h2 className="text-lg font-semibold mb-2">No projects yet</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Create a project from the Projects page to see dashboards and analytics here.
+              </p>
+              <Button onClick={() => router.push("/projects")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Go to Projects
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Overall Stats Grid — modern cards with concrete data */}
+        {!projectsLoading && projects.length > 0 && (
         <div className="px-4 lg:px-8 pb-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {overallStats.map((stat) => (
@@ -598,7 +627,23 @@ export default function DashboardPage() {
                           <FolderKanban className="h-5 w-5 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold truncate">{project.name}</h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold truncate">{project.name}</h3>
+                            {project.statusLabel && (
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "text-[10px] font-medium shrink-0",
+                                  project.status === "COMPLETED" && "bg-status-done/15 text-status-done border-status-done/30",
+                                  project.status === "IN_PROGRESS" && "bg-accent/15 text-accent border-accent/30",
+                                  project.status === "ON_HOLD" && "bg-muted text-muted-foreground",
+                                  project.status === "PLANNING" && "bg-status-todo/15 text-status-todo border-status-todo/30"
+                                )}
+                              >
+                                {project.statusLabel}
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
                             <Clock className="h-3 w-3" />
                             {project.lastActivity}
@@ -684,9 +729,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        )}
       </main>
 
-      {/* Create Dashboard Dialog */}
+      {/* New Project — redirect to Projects page */}
       <Dialog open={createDashboardOpen} onOpenChange={setCreateDashboardOpen}>
         <DialogContent className="border-glass-border sm:max-w-[500px]">
           <DialogHeader>
@@ -694,61 +740,19 @@ export default function DashboardPage() {
               <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
                 <Plus className="h-4 w-4 text-primary" />
               </div>
-              Create New Dashboard
+              New Project
             </DialogTitle>
             <DialogDescription>
-              Create a new dashboard to visualize and track your project analytics
+              Dashboards show analytics for your projects. Create a new project from the Projects page to see it here.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-name">Dashboard Name</Label>
-              <Input
-                id="dashboard-name"
-                placeholder="e.g., Q1 Analytics, Team Performance"
-                className="glass-subtle border-glass-border"
-                value={newDashboardName}
-                onChange={(e) => setNewDashboardName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-description">Description</Label>
-              <Textarea
-                id="dashboard-description"
-                placeholder="Describe the purpose of this dashboard..."
-                className="glass-subtle border-glass-border min-h-[100px]"
-                value={newDashboardDescription}
-                onChange={(e) => setNewDashboardDescription(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Select Projects</Label>
-              <div className="space-y-2">
-                {projects.map((project: DashboardProject) => (
-                  <label
-                    key={project.id}
-                    className="flex items-center gap-3 p-3 rounded-lg glass-subtle cursor-pointer hover:bg-primary/5 transition-colors"
-                  >
-                    <input type="checkbox" className="rounded" defaultChecked />
-                    <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", project.color)}>
-                      <FolderKanban className="h-4 w-4 text-white" />
-                    </div>
-                    <span className="text-sm font-medium">{project.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setCreateDashboardOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleCreateDashboard}
-              disabled={!newDashboardName.trim()}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Dashboard
+            <Button onClick={handleCreateDashboard}>
+              <FolderKanban className="h-4 w-4 mr-2" />
+              Go to Projects
             </Button>
           </DialogFooter>
         </DialogContent>

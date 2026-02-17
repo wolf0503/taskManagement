@@ -1,27 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { useProjects } from "@/contexts/projects-context"
+import { useTasks } from "@/contexts/tasks-context"
+import { useColumns } from "@/contexts/columns-context"
+import { projectsService } from "@/services/projects.service"
+import type { Project, ProjectStats } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -30,11 +25,12 @@ import {
   Clock, 
   FolderKanban,
   MessageSquare,
-  Activity,
   ArrowUp,
   ArrowDown,
   ArrowLeft,
   Heart,
+  FileText,
+  Calendar,
 } from "lucide-react"
 
 const ProgressDoughnutChart = dynamic(
@@ -54,159 +50,206 @@ const VelocityBarChart = dynamic(
   { ssr: false }
 )
 
-// Mock project data
-const dashboardData: Record<string, any> = {
-  "1": {
-    id: "1",
-    name: "Website Redesign",
-    color: "bg-chart-1",
-    completionRate: 25,
-    tasksCompleted: 2,
-    totalTasks: 8,
-    activeMembers: 4,
-    trend: "+12%",
+const CHART_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
+
+function formatLastActivity(updatedAt?: string | null): string {
+  if (!updatedAt) return "—"
+  try {
+    const d = new Date(updatedAt)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString()
+  } catch {
+    return "—"
+  }
+}
+
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  IN_PROGRESS: "In Progress",
+  COMPLETED: "Completed",
+  ON_HOLD: "On Hold",
+  PLANNING: "Planning",
+}
+
+function mapProjectToDashboard(
+  project: Project,
+  stats: ProjectStats | null,
+  memberCount: number
+): Record<string, any> {
+  const totalTasks = stats?.totalTasks ?? project.taskCount ?? 0
+  const completedTasks = stats?.completedTasks ?? project.completedTasks ?? 0
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+  const color = project.color && project.color.startsWith("bg-") ? project.color : CHART_COLORS[0]
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description ?? "",
+    status: project.status,
+    statusLabel: PROJECT_STATUS_LABELS[project.status] ?? project.status,
+    startDate: project.startDate ?? null,
+    endDate: project.endDate ?? null,
+    createdAt: project.createdAt ?? null,
+    updatedAt: project.updatedAt ?? null,
+    color,
+    completionRate,
+    tasksCompleted: completedTasks,
+    totalTasks,
+    activeMembers: memberCount,
+    trend: completionRate > 0 ? `+${completionRate}%` : "0%",
     trendUp: true,
-    lastActivity: "2 hours ago",
+    lastActivity: formatLastActivity(project.updatedAt),
     stats: {
-      todo: 3,
-      inProgress: 3,
-      done: 2,
-      velocity: "2.5 tasks/week",
-      timeSpent: "32h",
-      estimatedTime: "120h",
-      blockers: 0,
+      todo: stats?.todoTasks ?? Math.max(0, totalTasks - completedTasks),
+      inProgress: stats?.inProgressTasks ?? 0,
+      done: stats?.completedTasks ?? completedTasks,
+      velocity: "—",
+      timeSpent: "0",
+      estimatedTime: "0",
+      blockers: stats?.overdueTasks ?? 0,
     },
-    recentComments: [
-      { user: "Alice", avatar: "/professional-woman.png", text: "UI mockups are ready for review", time: "2h ago" },
-      { user: "Bob", avatar: "/professional-man.png", text: "Working on responsive design", time: "4h ago" },
-    ]
-  },
-  "2": {
-    id: "2",
-    name: "Mobile App",
-    color: "bg-chart-2",
-    completionRate: 42,
-    tasksCompleted: 5,
-    totalTasks: 12,
-    activeMembers: 2,
-    trend: "+8%",
-    trendUp: true,
-    lastActivity: "1 hour ago",
-    stats: {
-      todo: 4,
-      inProgress: 3,
-      done: 5,
-      velocity: "1.5 tasks/week",
-      timeSpent: "58h",
-      estimatedTime: "140h",
-      blockers: 1,
-    },
-    recentComments: [
-      { user: "Alice", avatar: "/professional-woman.png", text: "API integration completed", time: "1h ago" },
-    ]
-  },
-  "3": {
-    id: "3",
-    name: "Marketing Campaign",
-    color: "bg-chart-3",
-    completionRate: 0,
-    tasksCompleted: 0,
-    totalTasks: 6,
-    activeMembers: 1,
-    trend: "0%",
-    trendUp: true,
-    lastActivity: "1 day ago",
-    stats: {
-      todo: 6,
-      inProgress: 0,
-      done: 0,
-      velocity: "0 tasks/week",
-      timeSpent: "0h",
-      estimatedTime: "80h",
-      blockers: 0,
-    },
-    recentComments: [
-      { user: "Carol", avatar: "/woman-developer.png", text: "Planning phase in progress", time: "1d ago" },
-    ]
-  },
-  "4": {
-    id: "4",
-    name: "API Development",
-    color: "bg-chart-4",
-    completionRate: 100,
-    tasksCompleted: 15,
-    totalTasks: 15,
-    activeMembers: 2,
-    trend: "+100%",
-    trendUp: true,
-    lastActivity: "Completed",
-    stats: {
-      todo: 0,
-      inProgress: 0,
-      done: 15,
-      velocity: "3 tasks/week",
-      timeSpent: "180h",
-      estimatedTime: "180h",
-      blockers: 0,
-    },
-    recentComments: [
-      { user: "David", avatar: "/man-designer.png", text: "Documentation complete", time: "2d ago" },
-    ]
-  },
-  "5": {
-    id: "5",
-    name: "Database Migration",
-    color: "bg-chart-5",
-    completionRate: 30,
-    tasksCompleted: 3,
-    totalTasks: 10,
-    activeMembers: 2,
-    trend: "-5%",
-    trendUp: false,
-    lastActivity: "5 hours ago",
-    stats: {
-      todo: 4,
-      inProgress: 3,
-      done: 3,
-      velocity: "1 task/week",
-      timeSpent: "45h",
-      estimatedTime: "150h",
-      blockers: 2,
-    },
-    recentComments: [
-      { user: "Bob", avatar: "/professional-man.png", text: "Migration scripts ready", time: "5h ago" },
-    ]
-  },
+    recentComments: [],
+  }
 }
 
 export default function DashboardDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { getProject } = useProjects()
+  const { getTasks, loadProjectTasks } = useTasks()
+  const { getColumns, fetchColumns } = useColumns()
   const dashboardId = params.dashboardId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [dashboard, setDashboard] = useState<any>(null)
+  const [dashboard, setDashboard] = useState<Record<string, any> | null>(null)
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<any[]>([])
-  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
-  const [statusUpdateText, setStatusUpdateText] = useState("")
-  const [logTimeOpen, setLogTimeOpen] = useState(false)
-  const [logTimeHours, setLogTimeHours] = useState("")
-  const [logTimeNote, setLogTimeNote] = useState("")
   const [likedComments, setLikedComments] = useState<Set<number>>(new Set())
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [replyText, setReplyText] = useState("")
   const [replies, setReplies] = useState<Record<number, Array<{ user: string; text: string; time: string }>>>({})
 
+  // Load tasks and columns for this project so Task Distribution and Progress stay up to date
   useEffect(() => {
-    const foundDashboard = dashboardData[dashboardId]
-    if (foundDashboard) {
-      setDashboard(foundDashboard)
-      setComments(foundDashboard.recentComments)
-    } else {
-      router.push("/dashboard")
+    if (!dashboardId) return
+    loadProjectTasks(dashboardId)
+    fetchColumns(dashboardId, false)
+  }, [dashboardId, loadProjectTasks, fetchColumns])
+
+  // Per-column task counts (all project columns for Task Distribution chart)
+  const columnDistribution = useMemo(() => {
+    if (!dashboardId) return []
+    const tasks = getTasks(dashboardId)
+    const columns = getColumns(dashboardId)
+    return columns
+      .slice()
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .map((col) => ({
+        label: col.title,
+        count: tasks.filter((t) => t.columnId === col.id).length,
+        color: col.color,
+      }))
+  }, [dashboardId, getTasks, getColumns])
+
+  // Live task distribution from current tasks/columns (updates when tasks move)
+  const liveStats = useMemo(() => {
+    if (!dashboardId) return null
+    const tasks = getTasks(dashboardId)
+    const columns = getColumns(dashboardId)
+    const doneCol = columns.find((c) => c.title.toLowerCase().includes("done"))
+    const todoCols = columns.filter((c) => /to\s*do|todo/.test(c.title.toLowerCase()))
+    const progressCols = columns.filter((c) => c.title.toLowerCase().includes("progress"))
+    const totalTasks = tasks.length
+    const tasksCompleted = doneCol ? tasks.filter((t) => t.columnId === doneCol.id).length : 0
+    const todo = todoCols.length
+      ? tasks.filter((t) => todoCols.some((c) => c.id === t.columnId)).length
+      : Math.max(0, totalTasks - tasksCompleted)
+    const inProgress = progressCols.length
+      ? tasks.filter((t) => progressCols.some((c) => c.id === t.columnId)).length
+      : 0
+    const done = tasksCompleted
+    return { totalTasks, tasksCompleted, todo, inProgress, done, completionRate: totalTasks > 0 ? Math.round((tasksCompleted / totalTasks) * 100) : 0 }
+  }, [dashboardId, getTasks, getColumns])
+
+  // Use live stats for Task Distribution and Progress when available, else fall back to dashboard (API) stats
+  const displayStats = useMemo(() => {
+    if (!dashboard) return null
+    const base = dashboard.stats ?? {}
+    if (liveStats) {
+      return {
+        todo: liveStats.todo,
+        inProgress: liveStats.inProgress,
+        done: liveStats.done,
+        totalTasks: liveStats.totalTasks,
+        tasksCompleted: liveStats.tasksCompleted,
+        completionRate: liveStats.completionRate,
+        velocity: base.velocity ?? "—",
+        timeSpent: base.timeSpent ?? "0",
+        estimatedTime: base.estimatedTime ?? "0",
+        blockers: base.blockers ?? 0,
+      }
     }
-  }, [dashboardId, router])
+    return {
+      todo: base.todo ?? 0,
+      inProgress: base.inProgress ?? 0,
+      done: base.done ?? 0,
+      totalTasks: dashboard.totalTasks ?? 0,
+      tasksCompleted: dashboard.tasksCompleted ?? 0,
+      completionRate: dashboard.completionRate ?? 0,
+      velocity: base.velocity ?? "—",
+      timeSpent: base.timeSpent ?? "0",
+      estimatedTime: base.estimatedTime ?? "0",
+      blockers: base.blockers ?? 0,
+    }
+  }, [dashboard, liveStats])
+
+  useEffect(() => {
+    if (!dashboardId) return
+    const fromContext = getProject(dashboardId)
+    if (fromContext) {
+      let cancelled = false
+      Promise.all([
+        projectsService.getProjectStats(dashboardId).catch(() => null),
+        projectsService.getProjectMembers(dashboardId).then((list) => list.length).catch(() => 0),
+      ]).then(([stats, memberCount]) => {
+        if (cancelled) return
+        const mapped = mapProjectToDashboard(
+          fromContext,
+          stats,
+          typeof memberCount === "number" ? memberCount : 0
+        )
+        setDashboard(mapped)
+        setComments(mapped.recentComments ?? [])
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+    projectsService
+      .getProject(dashboardId)
+      .then((project) => {
+        return Promise.all([
+          Promise.resolve(project),
+          projectsService.getProjectStats(dashboardId).catch(() => null),
+          projectsService.getProjectMembers(dashboardId).then((list) => list.length).catch(() => 0),
+        ])
+      })
+      .then(([project, stats, memberCount]) => {
+        const mapped = mapProjectToDashboard(
+          project,
+          stats,
+          typeof memberCount === "number" ? memberCount : 0
+        )
+        setDashboard(mapped)
+        setComments(mapped.recentComments ?? [])
+      })
+      .catch(() => router.push("/dashboard"))
+  }, [dashboardId, getProject, router])
 
   const handlePostComment = () => {
     const text = commentText.trim()
@@ -223,43 +266,6 @@ export default function DashboardDetailPage() {
     setComments([newComment, ...comments])
     setCommentText("")
     toast({ title: "Comment posted" })
-  }
-
-  const handleStatusUpdate = () => {
-    const text = statusUpdateText.trim()
-    if (!text) return
-    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
-    const newComment = {
-      user: displayName,
-      avatar: user?.avatar ?? "/professional-avatar.png",
-      text: `[Status] ${text}`,
-      time: "Just now"
-    }
-    setComments([newComment, ...comments])
-    setStatusUpdateText("")
-    setStatusUpdateOpen(false)
-    toast({ title: "Status update posted" })
-  }
-
-  const handleLogTime = () => {
-    const hours = logTimeHours.trim()
-    if (!hours || isNaN(Number(hours)) || Number(hours) <= 0) {
-      toast({ title: "Enter valid hours", variant: "destructive" })
-      return
-    }
-    const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
-    const note = logTimeNote.trim()
-    const newComment = {
-      user: displayName,
-      avatar: user?.avatar ?? "/professional-avatar.png",
-      text: `[Time logged] ${hours}h${note ? ` — ${note}` : ""}`,
-      time: "Just now"
-    }
-    setComments([newComment, ...comments])
-    setLogTimeHours("")
-    setLogTimeNote("")
-    setLogTimeOpen(false)
-    toast({ title: `${hours}h logged` })
   }
 
   const handleLike = (commentIdx: number) => {
@@ -348,11 +354,15 @@ export default function DashboardDetailPage() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Dashboard for {dashboard.name} project analytics
+                    {dashboard.description || `Dashboard for ${dashboard.name} project analytics`}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="gap-1 font-medium">
+                  <FileText className="h-3 w-3" />
+                  {dashboard.statusLabel ?? dashboard.status}
+                </Badge>
                 <div className={cn(
                   "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
                   dashboard.trendUp ? "bg-status-done/10 text-status-done" : "bg-destructive/10 text-destructive"
@@ -371,7 +381,67 @@ export default function DashboardDetailPage() {
 
         {/* Dashboard Content */}
         <div className="px-4 lg:px-8 pb-6 space-y-6">
-          {/* Progress Overview (Chart.js) */}
+          {/* Project data */}
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FolderKanban className="h-5 w-5" />
+                Project
+              </CardTitle>
+              <CardDescription>Project details and timeline</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {dashboard.description ? (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Description</p>
+                  <p className="text-sm text-foreground">{dashboard.description}</p>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Status</span>
+                  <Badge variant="secondary">{dashboard.statusLabel ?? dashboard.status}</Badge>
+                </div>
+                {(dashboard.startDate || dashboard.endDate) && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {dashboard.startDate
+                        ? new Date(dashboard.startDate).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "—"}
+                      {" → "}
+                      {dashboard.endDate
+                        ? new Date(dashboard.endDate).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "—"}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {dashboard.activeMembers} member{dashboard.activeMembers !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Tasks</span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {dashboard.tasksCompleted} / {dashboard.totalTasks} completed
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Progress Overview (Chart.js) — uses live task data when available */}
+          {displayStats && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Progress Overview</CardTitle>
@@ -381,46 +451,65 @@ export default function DashboardDetailPage() {
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <div className="w-[200px] h-[200px] flex-shrink-0">
                   <ProgressDoughnutChart
-                    completed={dashboard.tasksCompleted}
-                    total={dashboard.totalTasks}
+                    completed={displayStats.tasksCompleted}
+                    total={displayStats.totalTasks}
                     size={200}
                   />
                 </div>
                 <div className="flex-1">
-                  <div className="text-2xl font-bold text-primary mb-1">{dashboard.completionRate}%</div>
+                  <div className="text-2xl font-bold text-primary mb-1">{displayStats.completionRate}%</div>
                   <div className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{dashboard.tasksCompleted}</span> completed ·{" "}
-                    <span className="font-medium text-foreground">{dashboard.totalTasks - dashboard.tasksCompleted}</span> remaining
+                    <span className="font-medium text-foreground">{displayStats.tasksCompleted}</span> completed ·{" "}
+                    <span className="font-medium text-foreground">{displayStats.totalTasks - displayStats.tasksCompleted}</span> remaining
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+          )}
 
-          {/* Task Distribution (Chart.js) */}
+          {/* Task Distribution (Chart.js) — one bar per project column, live task data */}
+          {displayStats && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Task Distribution</CardTitle>
-              <CardDescription>Breakdown of tasks by status</CardDescription>
+              <CardDescription>Tasks per column in this project</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[200px] mb-4">
-                <TaskDistributionBarChart
-                  todo={dashboard.stats.todo}
-                  inProgress={dashboard.stats.inProgress}
-                  done={dashboard.stats.done}
-                  height={200}
-                />
+              <div className="mb-4">
+                {columnDistribution.length > 0 ? (
+                  <TaskDistributionBarChart
+                    columns={columnDistribution}
+                    height={200}
+                  />
+                ) : (
+                  <TaskDistributionBarChart
+                    todo={displayStats.todo}
+                    inProgress={displayStats.inProgress}
+                    done={displayStats.done}
+                    height={200}
+                  />
+                )}
               </div>
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>To Do: <strong className="text-status-todo">{dashboard.stats.todo}</strong></span>
-                <span>In Progress: <strong className="text-accent">{dashboard.stats.inProgress}</strong></span>
-                <span>Done: <strong className="text-status-done">{dashboard.stats.done}</strong></span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                {columnDistribution.length > 0
+                  ? columnDistribution.map((col) => (
+                      <span key={col.label}>
+                        {col.label}: <strong className="text-foreground tabular-nums">{col.count}</strong>
+                      </span>
+                    ))
+                  : (
+                    <>
+                      <span>To Do: <strong className="text-status-todo">{displayStats.todo}</strong></span>
+                      <span>In Progress: <strong className="text-accent">{displayStats.inProgress}</strong></span>
+                      <span>Done: <strong className="text-status-done">{displayStats.done}</strong></span>
+                    </>
+                  )}
               </div>
-              {dashboard.stats.blockers > 0 && (
+              {displayStats.blockers > 0 && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20 mt-4">
                   <div className="h-12 w-12 rounded-lg bg-destructive/20 flex items-center justify-center">
-                    <span className="text-destructive text-xl font-bold">{dashboard.stats.blockers}</span>
+                    <span className="text-destructive text-xl font-bold">{displayStats.blockers}</span>
                   </div>
                   <div>
                     <div className="text-sm font-medium text-destructive">Active Blockers</div>
@@ -430,8 +519,10 @@ export default function DashboardDetailPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Performance Metrics (Chart.js) */}
+          {displayStats && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Performance Metrics</CardTitle>
@@ -443,16 +534,16 @@ export default function DashboardDetailPage() {
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
                   <div className="w-[160px] h-[160px] mb-4">
                     <TimeDoughnutChart
-                      spent={parseInt(dashboard.stats.timeSpent) || 0}
-                      estimated={Math.max(parseInt(dashboard.stats.estimatedTime) || 1, 1)}
+                      spent={parseInt(displayStats.timeSpent) || 0}
+                      estimated={Math.max(parseInt(displayStats.estimatedTime) || 1, 1)}
                       size={160}
                     />
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground mb-1">Time Tracking</div>
-                    <div className="text-lg font-bold">{dashboard.stats.timeSpent} / {dashboard.stats.estimatedTime}</div>
+                    <div className="text-lg font-bold">{displayStats.timeSpent} / {displayStats.estimatedTime}</div>
                     <div className="text-xs text-muted-foreground">
-                      {Math.round((parseInt(dashboard.stats.timeSpent) / Math.max(parseInt(dashboard.stats.estimatedTime), 1)) * 100)}% used
+                      {Math.round((parseInt(displayStats.timeSpent) / Math.max(parseInt(displayStats.estimatedTime), 1)) * 100)}% used
                     </div>
                   </div>
                 </div>
@@ -468,7 +559,7 @@ export default function DashboardDetailPage() {
                   </div>
                   <div className="text-center">
                     <div className="text-sm text-muted-foreground mb-1">Velocity</div>
-                    <div className="text-lg font-bold">{dashboard.stats.velocity}</div>
+                    <div className="text-lg font-bold">{displayStats.velocity}</div>
                   </div>
                 </div>
 
@@ -486,6 +577,7 @@ export default function DashboardDetailPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Comments Section */}
           <Card className="glass border-glass-border">
@@ -516,17 +608,7 @@ export default function DashboardDetailPage() {
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                     />
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => setStatusUpdateOpen(true)}>
-                          <Activity className="h-4 w-4 mr-2" />
-                          Status Update
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setLogTimeOpen(true)}>
-                          <Clock className="h-4 w-4 mr-2" />
-                          Log Time
-                        </Button>
-                      </div>
+                    <div className="flex justify-end">
                       <Button 
                         onClick={handlePostComment}
                         disabled={!commentText.trim()}
@@ -624,74 +706,6 @@ export default function DashboardDetailPage() {
         </div>
       </main>
 
-      {/* Status Update Dialog */}
-      <Dialog open={statusUpdateOpen} onOpenChange={setStatusUpdateOpen}>
-        <DialogContent className="border-glass-border sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Status Update</DialogTitle>
-            <DialogDescription>Share a quick status update for the team</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="status-text">Update</Label>
-              <Textarea
-                id="status-text"
-                placeholder="e.g. Completed API integration, starting frontend..."
-                className="min-h-[100px]"
-                value={statusUpdateText}
-                onChange={(e) => setStatusUpdateText(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setStatusUpdateOpen(false)}>Cancel</Button>
-            <Button onClick={handleStatusUpdate} disabled={!statusUpdateText.trim()}>
-              <Activity className="h-4 w-4 mr-2" />
-              Post Update
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Log Time Dialog */}
-      <Dialog open={logTimeOpen} onOpenChange={setLogTimeOpen}>
-        <DialogContent className="border-glass-border sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Log Time</DialogTitle>
-            <DialogDescription>Log hours spent on this project</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="log-hours">Hours</Label>
-              <Input
-                id="log-hours"
-                type="number"
-                min="0.5"
-                step="0.5"
-                placeholder="e.g. 2.5"
-                value={logTimeHours}
-                onChange={(e) => setLogTimeHours(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="log-note">Note (optional)</Label>
-              <Input
-                id="log-note"
-                placeholder="e.g. API integration"
-                value={logTimeNote}
-                onChange={(e) => setLogTimeNote(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setLogTimeOpen(false)}>Cancel</Button>
-            <Button onClick={handleLogTime} disabled={!logTimeHours.trim()}>
-              <Clock className="h-4 w-4 mr-2" />
-              Log Time
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

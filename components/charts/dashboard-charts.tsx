@@ -78,35 +78,65 @@ export function ProgressDoughnutChart({
   )
 }
 
-/** Task distribution by status: To Do, In Progress, Done (bar) */
+const columnColorPalette = [
+  defaultColors.todo,
+  defaultColors.inProgress,
+  defaultColors.done,
+  defaultColors.primary,
+  defaultColors.accent,
+  defaultColors.muted,
+]
+
+/** Convert hex to rgba string for Chart.js if needed */
+function hexToRgba(hex: string, alpha = 0.9): string {
+  if (!hex || !hex.startsWith("#")) return columnColorPalette[0]
+  const n = hex.slice(1)
+  const r = parseInt(n.slice(0, 2), 16)
+  const g = parseInt(n.slice(2, 4), 16)
+  const b = parseInt(n.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+/** Task distribution: by project columns (labels + counts) or fallback To Do / In Progress / Done */
 export function TaskDistributionBarChart({
   todo,
   inProgress,
   done,
+  columns: columnsProp,
   height = 200,
 }: {
-  todo: number
-  inProgress: number
-  done: number
+  todo?: number
+  inProgress?: number
+  done?: number
+  /** When set, chart shows one bar per project column instead of todo/inProgress/done */
+  columns?: { label: string; count: number; color?: string }[]
   height?: number
 }) {
+  const useColumns = columnsProp && columnsProp.length > 0
+  const labels = useColumns
+    ? columnsProp.map((c) => c.label)
+    : ["To Do", "In Progress", "Done"]
+  const values = useColumns
+    ? columnsProp.map((c) => c.count)
+    : [todo ?? 0, inProgress ?? 0, done ?? 0]
+  const backgroundColors = useColumns
+    ? columnsProp.map((c, i) => (c.color ? hexToRgba(c.color) : columnColorPalette[i % columnColorPalette.length]))
+    : [defaultColors.todo, defaultColors.inProgress, defaultColors.done]
+  const chartHeight = useColumns ? Math.max(height, 40 + columnsProp.length * 40) : height
+
   const data = {
-    labels: ["To Do", "In Progress", "Done"],
+    labels,
     datasets: [
       {
         label: "Tasks",
-        data: [todo, inProgress, done],
-        backgroundColor: [
-          defaultColors.todo,
-          defaultColors.inProgress,
-          defaultColors.done,
-        ],
+        data: values,
+        backgroundColor: backgroundColors,
         borderRadius: 8,
       },
     ],
   }
   return (
-    <div style={{ height }}>
+    <div style={{ height: chartHeight }}>
       <Bar
         data={data}
         options={{

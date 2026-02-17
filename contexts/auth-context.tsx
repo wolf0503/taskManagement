@@ -84,7 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.push('/dashboard')
     } catch (err) {
       const errorMessage = err instanceof ApiError
-        ? err.message
+        ? (err.statusCode === 429
+            ? 'Too many login attempts. Please wait a few minutes and try again.'
+            : err.message)
         : 'Login failed. Please check your credentials.'
       setError(errorMessage)
       throw err
@@ -109,7 +111,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await login(data.email, data.password)
     } catch (err) {
       const errorMessage = err instanceof ApiError
-        ? err.message
+        ? (err.statusCode === 429
+            ? 'Too many attempts. Please wait a few minutes and try again.'
+            : err.message)
         : 'Registration failed. Please try again.'
       setError(errorMessage)
       throw err

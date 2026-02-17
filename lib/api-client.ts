@@ -173,15 +173,28 @@ class ApiClient {
         }
       }
 
-      // Parse response
-      const data: ApiResponse<T> = await response.json()
+      // Parse response (429 may return HTML or non-JSON from some servers)
+      let data: ApiResponse<T>
+      try {
+        data = await response.json()
+      } catch {
+        data = { success: false }
+      }
 
       // Handle error responses
       if (!response.ok || !data.success) {
+        const status = response.status
+        let message = data.message || 'An error occurred'
+        if (status === 429) {
+          const retryAfter = response.headers.get('Retry-After')
+          message = retryAfter
+            ? `Too many requests. Please try again in ${retryAfter} seconds.`
+            : 'Too many requests. Please wait a few minutes and try again.'
+        }
         throw new ApiError(
-          response.status,
-          data.error?.code || 'UNKNOWN_ERROR',
-          data.message || 'An error occurred',
+          status,
+          data.error?.code || (status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'UNKNOWN_ERROR'),
+          message,
           data.error?.details
         )
       }
