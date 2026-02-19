@@ -38,42 +38,51 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [fetchingProject, setFetchingProject] = useState(false)
 
-  useEffect(() => {
-    if (!projectId) return
-    projectsService
-      .getProjectMembers(projectId)
-      .then(setMembers)
-      .catch(() => setMembers([]))
-  }, [projectId])
-
   const teamMembers = useMemo(() => mapMembersToTeamMembers(members), [members])
   const projectWithMembers = useMemo(
     () => (project ? { ...project, teamMembers } : null),
     [project, teamMembers]
   )
 
-  // Resolve project from context or by ID (keeps page on refresh)
+  // Load project, then members, then columns+tasks (sequential to avoid 429 burst)
   useEffect(() => {
     if (!projectId) return
-    const fromContext = getProject(projectId)
-    if (fromContext) {
-      setProject(fromContext)
-      setFetchingProject(false)
-      fetchColumns(projectId, false)
-      loadProjectTasks(projectId)
-      return
-    }
-    if (projectsLoading) return
-    setFetchingProject(true)
-    projectsService
-      .getProject(projectId)
-      .then((p) => {
-        setProject(p)
+    let cancelled = false
+
+    const run = async () => {
+      const fromContext = getProject(projectId)
+      if (fromContext) {
+        if (!cancelled) {
+          setProject(fromContext)
+          setFetchingProject(false)
+        }
+        await projectsService.getProjectMembers(projectId).then((m) => {
+          if (!cancelled) setMembers(m)
+        }).catch(() => { if (!cancelled) setMembers([]) })
+        if (cancelled) return
         fetchColumns(projectId, false)
         loadProjectTasks(projectId)
-      })
-      .catch(() => router.push("/projects"))
-      .finally(() => setFetchingProject(false))
+        return
+      }
+      if (projectsLoading) return
+      setFetchingProject(true)
+      try {
+        const p = await projectsService.getProject(projectId)
+        if (cancelled) return
+        setProject(p)
+        const m = await projectsService.getProjectMembers(projectId).catch(() => [])
+        if (!cancelled) setMembers(m)
+        if (cancelled) return
+        fetchColumns(projectId, false)
+        loadProjectTasks(projectId)
+      } catch {
+        if (!cancelled) router.push("/projects")
+      } finally {
+        if (!cancelled) setFetchingProject(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
   }, [projectId, getProject, projectsLoading, router, fetchColumns, loadProjectTasks])
 
   if (!project) {
@@ -126,6 +135,7 @@ export default function ProjectDetailPage() {
         <Header
           project={projectWithMembers ?? project}
           projectId={projectId}
+          projectMembers={members}
           onAddMembersClick={() => setAddMembersOpen(true)}
         />
         <TaskBoard projectId={projectId} />

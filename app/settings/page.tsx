@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
@@ -31,6 +32,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Upload,
+  LayoutGrid,
+  EyeOff,
 } from "lucide-react"
 import {
   Select,
@@ -47,9 +50,15 @@ import {
 } from "@/components/ui/tabs"
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get("tab")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activeTab, setActiveTab] = useState("profile")
+  const [activeTab, setActiveTab] = useState(tabParam || "application")
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (tabParam) setActiveTab(tabParam)
+  }, [tabParam])
 
   const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
   const initials = displayName
@@ -92,7 +101,7 @@ export default function SettingsPage() {
               <div>
                 <h1 className="text-2xl font-bold">Settings</h1>
                 <p className="text-sm text-muted-foreground">
-                  Manage your account settings and preferences
+                  Task management application and account settings
                 </p>
               </div>
             </div>
@@ -103,7 +112,11 @@ export default function SettingsPage() {
         <div className="px-4 lg:px-8 pb-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <div className="glass rounded-xl p-2">
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 gap-2 bg-transparent">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-7 gap-2 bg-transparent">
+                <TabsTrigger value="application" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span className="hidden sm:inline">Application</span>
+                </TabsTrigger>
                 <TabsTrigger value="profile" className="gap-2">
                   <User className="h-4 w-4" />
                   <span className="hidden sm:inline">Profile</span>
@@ -130,6 +143,113 @@ export default function SettingsPage() {
                 </TabsTrigger>
               </TabsList>
             </div>
+
+            {/* Application Tab - Task management settings */}
+            <TabsContent value="application" className="space-y-6">
+              <Card className="glass border-glass-border">
+                <CardHeader>
+                  <CardTitle>Task Management</CardTitle>
+                  <CardDescription>
+                    Default behavior and display options for tasks and projects.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>Default project view</Label>
+                    <Select defaultValue="board">
+                      <SelectTrigger className="glass-subtle border-glass-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass border-glass-border">
+                        <SelectItem value="board">Board (Kanban)</SelectItem>
+                        <SelectItem value="list">List</SelectItem>
+                        <SelectItem value="timeline">Timeline</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Opening a project will use this view by default
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label>Default task sort</Label>
+                    <Select defaultValue="priority">
+                      <SelectTrigger className="glass-subtle border-glass-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass border-glass-border">
+                        <SelectItem value="priority">Priority</SelectItem>
+                        <SelectItem value="dueDate">Due date</SelectItem>
+                        <SelectItem value="created">Date created</SelectItem>
+                        <SelectItem value="status">Status</SelectItem>
+                        <SelectItem value="name">Name</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label>Week starts on</Label>
+                    <Select defaultValue="monday">
+                      <SelectTrigger className="glass-subtle border-glass-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass border-glass-border">
+                        <SelectItem value="sunday">Sunday</SelectItem>
+                        <SelectItem value="monday">Monday</SelectItem>
+                        <SelectItem value="saturday">Saturday</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Affects calendar and date pickers
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="flex items-center gap-2">
+                        <EyeOff className="h-4 w-4" />
+                        Hide completed tasks by default
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Completed tasks are collapsed or hidden in project views until toggled
+                      </p>
+                    </div>
+                    <Switch />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label>Default task priority</Label>
+                    <Select defaultValue="medium">
+                      <SelectTrigger className="glass-subtle border-glass-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass border-glass-border">
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline">Cancel</Button>
+                    <Button className="gap-2">
+                      <Save className="h-4 w-4" />
+                      Save
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* Profile Tab */}
             <TabsContent value="profile" className="space-y-6">

@@ -109,9 +109,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const getProject = (id: string): Project | undefined => {
+  const getProject = useCallback((id: string): Project | undefined => {
     return projects.find((p) => p.id === id)
-  }
+  }, [projects])
 
   const updateProject = async (id: string, updates: UpdateProjectData): Promise<void> => {
     setIsLoading(true)

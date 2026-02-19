@@ -94,8 +94,8 @@ export function EditTaskDialog({
   const firstColumnId = columns.length > 0 ? columns[0].id : ""
 
   useEffect(() => {
-    if (open && projectId) fetchColumns(projectId, true)
-  }, [open, projectId, fetchColumns])
+    if (open && projectId && getColumns(projectId).length === 0) fetchColumns(projectId, true)
+  }, [open, projectId, fetchColumns, getColumns])
 
   useEffect(() => {
     if (!open || !projectId) return

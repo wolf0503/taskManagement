@@ -138,9 +138,9 @@ class ApiClient {
     retried429 = false
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string> || {}),
     }
 
     // Add authorization header if token exists
@@ -162,10 +162,14 @@ class ApiClient {
           await this.refreshAccessToken()
           
           // Retry original request with new token
-          headers['Authorization'] = `Bearer ${this.accessToken}`
+          const retryHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(options.headers as Record<string, string> || {}),
+            'Authorization': `Bearer ${this.accessToken}`,
+          }
           response = await fetch(url, {
             ...options,
-            headers,
+            headers: retryHeaders,
             credentials: 'include',
           })
         } catch (refreshError) {
@@ -200,15 +204,23 @@ class ApiClient {
         let message = data.message || 'An error occurred'
         if (status === 429) {
           const retryAfter = response.headers.get('Retry-After')
-          message = retryAfter
-            ? `Too many requests. Please try again in ${retryAfter} seconds.`
-            : 'Too many requests. Please wait a few minutes and try again.'
+          if (retryAfter) {
+            const seconds = parseInt(retryAfter, 10)
+            const minutes = Math.ceil(seconds / 60)
+            if (minutes > 1) {
+              message = `Too many login attempts. Please wait ${minutes} minutes before trying again.`
+            } else {
+              message = `Too many login attempts. Please wait ${seconds} seconds before trying again.`
+            }
+          } else {
+            message = 'Too many login attempts. Please wait a few minutes and try again.'
+          }
         }
         throw new ApiError(
           status,
           data.error?.code || (status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'UNKNOWN_ERROR'),
           message,
-          data.error?.details
+          { ...data.error?.details, retryAfter: response.headers.get('Retry-After') }
         )
       }
 

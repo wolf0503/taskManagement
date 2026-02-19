@@ -227,7 +227,7 @@ export default function DashboardPage() {
     const load = async () => {
       const stats: Record<string, ProjectStats> = {}
       const members: Record<string, number> = {}
-      await runWithConcurrencyLimit(apiProjects, 2, async (project) => {
+      await runWithConcurrencyLimit(apiProjects, 1, async (project) => {
         if (cancelled) return
         try {
           const [s, m] = await Promise.all([

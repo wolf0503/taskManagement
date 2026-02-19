@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -21,8 +21,11 @@ const signInSchema = z.object({
 
 type SignInFormValues = z.infer<typeof signInSchema>
 
+const DEFAULT_RATE_LIMIT_SECONDS = 120
+
 export default function SignInPage() {
   const { login, isLoading, error, clearError } = useAuth()
+  const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null)
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -32,18 +35,41 @@ export default function SignInPage() {
     },
   })
 
+  // Countdown timer when rate limited
+  useEffect(() => {
+    if (countdownSeconds === null || countdownSeconds <= 0) return
+    const timer = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev === null || prev <= 1) {
+          clearError()
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [countdownSeconds, clearError])
+
   const onSubmit = async (data: SignInFormValues) => {
     clearError()
+    setCountdownSeconds(null)
     try {
       await login(data.email, data.password)
     } catch (err) {
       if (err instanceof ApiError && err.code === 'RATE_LIMIT_EXCEEDED') {
-        console.warn('Login rate limited (429). Try again in a few minutes.')
+        const retryAfter = err.details?.retryAfter
+        const seconds = retryAfter ? parseInt(String(retryAfter), 10) : DEFAULT_RATE_LIMIT_SECONDS
+        setCountdownSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_RATE_LIMIT_SECONDS)
       } else {
         console.error('Login failed:', err)
       }
     }
   }
+
+  const isRateLimited = countdownSeconds !== null && countdownSeconds > 0
+  const countdownDisplay = countdownSeconds !== null && countdownSeconds > 0
+    ? `${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, "0")}`
+    : null
 
   return (
     <div className="min-h-screen animated-gradient-bg flex items-center justify-center p-4">
@@ -76,10 +102,20 @@ export default function SignInPage() {
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                <span className="block">{error}</span>
+                <span className="block font-medium">{error}</span>
                 {error.toLowerCase().includes("too many") && (
                   <span className="mt-2 block text-sm opacity-90">
-                    Wait a few minutes, then try once. If you run the backend locally, you can relax or disable the auth rate limit for development.
+                    This is a security measure to prevent brute force attacks. Please wait before trying again.
+                    {countdownDisplay !== null && (
+                      <span className="mt-2 flex items-center gap-2 font-medium tabular-nums">
+                        Try again in: <span className="text-base">{countdownDisplay}</span>
+                      </span>
+                    )}
+                    {process.env.NODE_ENV === 'development' && (
+                      <span className="block mt-1 text-xs opacity-75">
+                        Development tip: You can relax rate limits on the backend for local development.
+                      </span>
+                    )}
                   </span>
                 )}
               </AlertDescription>
@@ -151,13 +187,15 @@ export default function SignInPage() {
               <Button
                 type="submit"
                 className="w-full gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
-                disabled={isLoading || form.formState.isSubmitting}
+                disabled={isLoading || form.formState.isSubmitting || isRateLimited}
               >
                 {isLoading ? (
                   <>
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                     Signing in...
                   </>
+                ) : isRateLimited && countdownDisplay ? (
+                  <>Try again in {countdownDisplay}</>
                 ) : (
                   <>
                     Sign in

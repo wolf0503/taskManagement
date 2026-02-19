@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Plus, Clock, CheckCircle2, Pause, FileText, X, UserPlus } from "lucide-react"
-import type { Project } from "@/lib/types"
+import type { Project, ProjectMember } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { AddTaskDialog } from "@/components/add-task-dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -36,10 +36,12 @@ const statusConfig = {
 interface HeaderProps {
   project?: Project & { teamMembers?: { id?: string; name: string; avatar: string }[] }
   projectId?: string
+  /** Pass to avoid refetching members when opening Add Task (reduces 429 risk) */
+  projectMembers?: ProjectMember[]
   onAddMembersClick?: () => void
 }
 
-export function Header({ project, projectId, onAddMembersClick }: HeaderProps) {
+export function Header({ project, projectId, projectMembers, onAddMembersClick }: HeaderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { getFilters, setFilters, clearFilters } = useFilters()
   const filters = projectId ? getFilters(projectId) : { assignees: [], priority: null, showAll: true }
@@ -194,6 +196,7 @@ export function Header({ project, projectId, onAddMembersClick }: HeaderProps) {
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
           projectId={projectId}
+          initialMembers={projectMembers}
         />
       )}
     </header>

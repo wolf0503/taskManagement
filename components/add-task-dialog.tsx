@@ -77,6 +77,8 @@ interface AddTaskDialogProps {
   onOpenChange: (open: boolean) => void
   projectId: string
   defaultColumnId?: string
+  /** When provided, used instead of fetching (avoids extra request and 429) */
+  initialMembers?: ProjectMember[]
 }
 
 export function AddTaskDialog({
@@ -84,6 +86,7 @@ export function AddTaskDialog({
   onOpenChange,
   projectId,
   defaultColumnId,
+  initialMembers,
 }: AddTaskDialogProps) {
   const { addTask } = useTasks()
   const { getProject } = useProjects()
@@ -92,21 +95,22 @@ export function AddTaskDialog({
   const [tagInput, setTagInput] = useState("")
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [membersLoading, setMembersLoading] = useState(false)
+  const membersToUse = initialMembers && initialMembers.length > 0 ? initialMembers : members
 
   const project = getProject(projectId)
   const columns = getColumns(projectId)
   const firstColumnId = columns.length > 0 ? columns[0].id : ""
 
-  // Fetch columns when dialog opens
+  // Fetch columns only when dialog opens and we don't have columns yet (avoids duplicate request)
   useEffect(() => {
-    if (open && projectId) {
+    if (open && projectId && getColumns(projectId).length === 0) {
       fetchColumns(projectId, true)
     }
-  }, [open, projectId, fetchColumns])
+  }, [open, projectId, fetchColumns, getColumns])
 
-  // Fetch project members for assignee dropdown (real user IDs)
+  // Fetch project members only when dialog opens and not provided by parent (avoids 429)
   useEffect(() => {
-    if (!open || !projectId) return
+    if (!open || !projectId || (initialMembers && initialMembers.length > 0)) return
     setMembersLoading(true)
     projectsService
       .getProjectMembers(projectId)
@@ -116,7 +120,7 @@ export function AddTaskDialog({
         toast({ title: "Could not load team members", description: "Assignee list may be empty.", variant: "destructive" })
       })
       .finally(() => setMembersLoading(false))
-  }, [open, projectId])
+  }, [open, projectId, initialMembers])
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -334,7 +338,7 @@ export function AddTaskDialog({
                         <SelectValue placeholder={membersLoading ? "Loading…" : "Select assignee (optional)"}>
                           {field.value && field.value !== UNASSIGNED_VALUE ? (
                             (() => {
-                              const member = members.find((m) => m.userId === field.value)
+                              const member = membersToUse.find((m) => m.userId === field.value)
                               if (!member) return field.value
                               return (
                                 <div className="flex items-center gap-2">
@@ -358,7 +362,7 @@ export function AddTaskDialog({
                       <SelectItem value={UNASSIGNED_VALUE}>
                         <span className="text-muted-foreground">Unassigned</span>
                       </SelectItem>
-                      {members.map((member) => (
+                      {membersToUse.map((member) => (
                         <SelectItem key={member.userId} value={member.userId}>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-5 w-5">
@@ -374,7 +378,7 @@ export function AddTaskDialog({
                           </div>
                         </SelectItem>
                       ))}
-                      {!membersLoading && members.length === 0 && (
+                      {!membersLoading && membersToUse.length === 0 && (
                         <div className="px-2 py-1.5 text-sm text-muted-foreground">
                           No project members. Add members to the project first.
                         </div>

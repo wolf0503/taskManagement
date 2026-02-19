@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useProjects } from "@/contexts/projects-context"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboards", active: false, href: "/dashboard" },
@@ -35,11 +36,7 @@ const navItems = [
   { icon: Settings, label: "Settings", active: false, href: "/settings" },
 ]
 
-const projects = [
-  { name: "Website Redesign", color: "bg-chart-1" },
-  { name: "Mobile App", color: "bg-chart-2" },
-  { name: "Marketing", color: "bg-chart-3" },
-]
+const chartColors = ["bg-chart-1", "bg-chart-2", "bg-chart-3"]
 
 interface SidebarProps {
   collapsed?: boolean
@@ -52,6 +49,7 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
   const router = useRouter()
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const { projects } = useProjects()
 
   const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
   const initials = displayName
@@ -163,20 +161,36 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
         <div className={cn("px-4 py-4 transition-opacity", collapsed && "opacity-0")}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
-            <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-secondary">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 hover:bg-secondary"
+              onClick={() => { router.push("/projects"); setMobileOpen(false) }}
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div className="space-y-1">
-            {projects.map((project) => (
-              <button
-                key={project.name}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              >
-                <div className={cn("h-2.5 w-2.5 rounded-full", project.color)} />
-                <span className="truncate">{project.name}</span>
-              </button>
-            ))}
+          <div className="space-y-1 max-h-[min(14rem,35vh)] overflow-y-auto overflow-x-hidden pr-1">
+            {projects.map((project, i) => {
+              const colorClass = project.color?.startsWith("#") ? undefined : (project.color || chartColors[i % chartColors.length])
+              const colorStyle = project.color?.startsWith("#") ? { backgroundColor: project.color } : undefined
+              return (
+                <button
+                  key={project.id}
+                  onClick={() => {
+                    router.push(`/projects/${project.id}`)
+                    setMobileOpen(false)
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                >
+                  <div
+                    className={cn("h-2.5 w-2.5 rounded-full shrink-0", colorClass)}
+                    style={colorStyle}
+                  />
+                  <span className="truncate">{project.name}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -209,6 +223,17 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
                   <p className="text-xs text-muted-foreground">{user?.email ?? ""}</p>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  router.push("/settings?tab=account")
+                  setMobileOpen(false)
+                }}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Account settings and preferences
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => logout()}
