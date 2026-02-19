@@ -25,7 +25,8 @@ function Switch({
         className={cn(
           'pointer-events-none block size-4 rounded-full transition-transform',
           'data-[state=checked]:bg-primary-foreground data-[state=checked]:translate-x-[calc(100%-2px)]',
-          'data-[state=unchecked]:bg-background data-[state=unchecked]:translate-x-0 data-[state=unchecked]:ring-1 data-[state=unchecked]:ring-border data-[state=unchecked]:shadow-sm',
+          'data-[state=unchecked]:translate-x-0',
+          'data-[state=unchecked]:bg-muted-foreground data-[state=unchecked]:ring-2 data-[state=unchecked]:ring-background/80 data-[state=unchecked]:shadow-md',
         )}
       />
     </SwitchPrimitive.Root>
