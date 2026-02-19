@@ -12,7 +12,6 @@ import {
   Users,
   Search,
   Mail,
-  Phone,
   MapPin,
   Briefcase,
   Calendar,
@@ -46,110 +45,37 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { getTeamMembers, type TeamMemberFromApi } from "@/services/teams.service"
 
-// Team member type
-interface TeamMember {
-  id: string
-  name: string
-  role: string
-  email: string
-  phone: string
-  location: string
-  avatar: string
-  status: string
-  projects: string[]
-  joinedDate: string
-  tasksCompleted: number
-  department: string
+// Use API-backed type for team member display
+type TeamMember = TeamMemberFromApi
+
+const LOCAL_ADDED_KEY = "teamMembersAdded"
+
+function getLocalTeamMembersAdded(): TeamMember[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(LOCAL_ADDED_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
 }
 
-// Mock team members data - initial data
-const initialTeamMembers: TeamMember[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    role: "Product Manager",
-    email: "sarah.j@company.com",
-    phone: "+1 (555) 123-4567",
-    location: "San Francisco, CA",
-    avatar: "/professional-woman.png",
-    status: "online",
-    projects: ["Website Redesign", "Mobile App"],
-    joinedDate: "Jan 2023",
-    tasksCompleted: 127,
-    department: "Product",
-  },
-  {
-    id: "2",
-    name: "Michael Chen",
-    role: "Senior Developer",
-    email: "m.chen@company.com",
-    phone: "+1 (555) 234-5678",
-    location: "New York, NY",
-    avatar: "/professional-man.png",
-    status: "online",
-    projects: ["Website Redesign", "API Integration"],
-    joinedDate: "Mar 2022",
-    tasksCompleted: 243,
-    department: "Engineering",
-  },
-  {
-    id: "3",
-    name: "Emily Rodriguez",
-    role: "UX Designer",
-    email: "emily.r@company.com",
-    phone: "+1 (555) 345-6789",
-    location: "Austin, TX",
-    avatar: "/woman-developer.png",
-    status: "away",
-    projects: ["Mobile App", "Marketing"],
-    joinedDate: "Jun 2023",
-    tasksCompleted: 89,
-    department: "Design",
-  },
-  {
-    id: "4",
-    name: "David Park",
-    role: "DevOps Engineer",
-    email: "d.park@company.com",
-    phone: "+1 (555) 456-7890",
-    location: "Seattle, WA",
-    avatar: "/man-designer.png",
-    status: "online",
-    projects: ["Infrastructure", "API Integration"],
-    joinedDate: "Feb 2022",
-    tasksCompleted: 156,
-    department: "Engineering",
-  },
-  {
-    id: "5",
-    name: "Jessica Taylor",
-    role: "Marketing Lead",
-    email: "j.taylor@company.com",
-    phone: "+1 (555) 567-8901",
-    location: "Los Angeles, CA",
-    avatar: "/professional-avatar.png",
-    status: "offline",
-    projects: ["Marketing", "Content Strategy"],
-    joinedDate: "Aug 2023",
-    tasksCompleted: 72,
-    department: "Marketing",
-  },
-  {
-    id: "6",
-    name: "Alex Kumar",
-    role: "Full Stack Developer",
-    email: "a.kumar@company.com",
-    phone: "+1 (555) 678-9012",
-    location: "Chicago, IL",
-    avatar: "/professional-man.png",
-    status: "online",
-    projects: ["Website Redesign", "Mobile App"],
-    joinedDate: "Nov 2022",
-    tasksCompleted: 198,
-    department: "Engineering",
-  },
-]
+function saveLocalTeamMembersAdded(list: TeamMember[]) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(LOCAL_ADDED_KEY, JSON.stringify(list))
+  } catch {
+    // ignore
+  }
+}
+
+function mergeWithLocal(apiList: TeamMember[], localAdded: TeamMember[]): TeamMember[] {
+  const apiEmails = new Set(apiList.map((m) => m.email.toLowerCase()))
+  const onlyLocal = localAdded.filter((m) => !apiEmails.has(m.email.toLowerCase()))
+  return [...apiList, ...onlyLocal]
+}
 
 export default function TeamsPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -157,14 +83,9 @@ export default function TeamsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
-  const [teamMembers, setTeamMembers] = useState(() => {
-    // Load from localStorage on initial render
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('teamMembers')
-      return saved ? JSON.parse(saved) : initialTeamMembers
-    }
-    return initialTeamMembers
-  })
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(true)
+  const [membersError, setMembersError] = useState<string | null>(null)
   const [newMember, setNewMember] = useState({
     name: "",
     role: "",
@@ -174,12 +95,30 @@ export default function TeamsPage() {
     department: "",
   })
 
-  // Save to localStorage whenever teamMembers change
+  // Fetch team members from backend API and merge with locally added (saved) members
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('teamMembers', JSON.stringify(teamMembers))
-    }
-  }, [teamMembers])
+    let cancelled = false
+    setMembersLoading(true)
+    setMembersError(null)
+    getTeamMembers()
+      .then((data) => {
+        if (!cancelled) {
+          const localAdded = getLocalTeamMembersAdded()
+          setTeamMembers(mergeWithLocal(data, localAdded))
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setMembersError(err?.message ?? "Failed to load team members")
+          const localAdded = getLocalTeamMembersAdded()
+          setTeamMembers(localAdded)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMembersLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const filteredMembers = teamMembers.filter((member: TeamMember) => {
     const matchesSearch =
@@ -212,14 +151,14 @@ export default function TeamsPage() {
       year: "numeric",
     })
 
-    const newMemberData = {
-      id: String(teamMembers.length + 1),
+    const newMemberData: TeamMember = {
+      id: `local-${Date.now()}`,
       name: newMember.name,
       role: newMember.role,
-      email: newMember.email,
-      phone: newMember.phone || "N/A",
-      location: newMember.location || "Remote",
-      avatar: "/professional-avatar.png",
+      email: newMember.email.trim(),
+      phone: newMember.phone || "—",
+      location: newMember.location || "—",
+      avatar: "/placeholder.svg",
       status: "online",
       projects: [],
       joinedDate: monthYear,
@@ -227,8 +166,10 @@ export default function TeamsPage() {
       department: newMember.department,
     }
 
-    // Add the new member to the team
-    setTeamMembers([...teamMembers, newMemberData])
+    // Add to state and persist so it survives refresh
+    const nextList = [...teamMembers, newMemberData]
+    setTeamMembers(nextList)
+    saveLocalTeamMembersAdded(getLocalTeamMembersAdded().concat(newMemberData))
 
     // Reset form and close dialog
     setIsAddMemberOpen(false)
@@ -272,7 +213,10 @@ export default function TeamsPage() {
 
   const handleDeleteMember = (memberId: string) => {
     if (confirm('Are you sure you want to remove this team member?')) {
-      setTeamMembers(teamMembers.filter((m: TeamMember) => m.id !== memberId))
+      const nextList = teamMembers.filter((m: TeamMember) => m.id !== memberId)
+      setTeamMembers(nextList)
+      // Persist: only keep locally-added members that remain in the list
+      saveLocalTeamMembersAdded(nextList.filter((m) => m.id.startsWith("local-")))
     }
   }
 
@@ -336,6 +280,27 @@ export default function TeamsPage() {
 
         {/* Filters and Search */}
         <div className="px-4 lg:px-8 pb-6">
+          {membersError && (
+            <Card className="glass border-glass-border border-destructive/50 mb-6">
+              <CardContent className="flex items-center gap-3 py-4">
+                <p className="text-sm text-destructive flex-1">{membersError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setMembersError(null)
+                    setMembersLoading(true)
+                    getTeamMembers()
+                      .then(setTeamMembers)
+                      .catch((err) => setMembersError(err?.message ?? "Failed to load team members"))
+                      .finally(() => setMembersLoading(false))
+                  }}
+                >
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          )}
           <div className="glass rounded-xl p-4 mb-6">
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
               <div className="relative flex-1 w-full">
@@ -345,6 +310,7 @@ export default function TeamsPage() {
                   className="pl-10 glass-subtle border-glass-border"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={membersLoading}
                 />
               </div>
               <div className="flex items-center gap-2 w-full lg:w-auto">
@@ -384,7 +350,14 @@ export default function TeamsPage() {
           </div>
 
           {/* Team Members Grid/List */}
-          {viewMode === "grid" ? (
+          {membersLoading ? (
+            <Card className="glass border-glass-border">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent mb-4" />
+                <p className="text-sm text-muted-foreground">Loading team members...</p>
+              </CardContent>
+            </Card>
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredMembers.map((member: TeamMember) => (
                 <Card

@@ -216,7 +216,7 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="top" className="w-56 glass border-glass-border">
+            <DropdownMenuContent align="end" side="top" className="w-56 bg-popover border border-border shadow-lg opacity-100">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{displayName || "User"}</p>
