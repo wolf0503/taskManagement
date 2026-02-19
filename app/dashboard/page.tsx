@@ -48,7 +48,16 @@ import {
   Copy,
   Download,
   Share2,
+  Settings,
 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import {
+  getDashboardMetrics,
+  setDashboardMetrics,
+  DASHBOARD_METRIC_IDS,
+  DASHBOARD_METRIC_LABELS,
+  type DashboardMetricsConfig,
+} from "@/lib/dashboard-metrics"
 
 const ProgressDoughnutChart = dynamic(
   () => import("@/components/charts/dashboard-charts").then((m) => ({ default: m.ProgressDoughnutChart })),
@@ -204,6 +213,8 @@ export default function DashboardPage() {
   const [editDashboardDescription, setEditDashboardDescription] = useState("")
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({})
   const [projectComments, setProjectComments] = useState<Record<string, any[]>>({})
+  const [metricsProjectId, setMetricsProjectId] = useState<string | null>(null)
+  const [metricsForm, setMetricsForm] = useState<DashboardMetricsConfig | null>(null)
 
   // Load stats and member counts for each project (with concurrency limit to avoid 429 rate limiting)
   useEffect(() => {
@@ -364,6 +375,16 @@ export default function DashboardPage() {
       setEditDashboardDescription((project as any).description || `Dashboard for ${project.name}`)
       setEditingProject(projectId)
     }
+  }
+
+  const openMetricsDialog = (projectId: string) => {
+    setMetricsProjectId(projectId)
+    setMetricsForm(getDashboardMetrics(projectId))
+  }
+
+  const handleMetricToggle = (projectId: string, key: keyof DashboardMetricsConfig, checked: boolean) => {
+    setDashboardMetrics(projectId, { [key]: checked })
+    setMetricsForm((prev) => (prev ? { ...prev, [key]: checked } : null))
   }
 
   // Derived metrics from actual project data
@@ -651,17 +672,31 @@ export default function DashboardPage() {
                           </p>
                         </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="glass border-glass-border w-48">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project.id); }}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Dashboard
-                          </DropdownMenuItem>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => { e.stopPropagation(); openMetricsDialog(project.id); }}
+                          title="Metrics settings"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="glass border-glass-border w-48">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openMetricsDialog(project.id); }}>
+                              <Settings className="h-4 w-4 mr-2" />
+                              Metrics
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEditDialog(project.id); }}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Dashboard
+                            </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateDashboard(project.id); }}>
                             <Copy className="h-4 w-4 mr-2" />
                             Duplicate
@@ -680,7 +715,8 @@ export default function DashboardPage() {
                             Delete Dashboard
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
+                        </DropdownMenu>
+                      </div>
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
@@ -800,6 +836,40 @@ export default function DashboardPage() {
             >
               <Edit className="h-4 w-4 mr-2" />
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Metrics settings dialog — show/hide metrics on project dashboard */}
+      <Dialog open={metricsProjectId !== null} onOpenChange={(open) => !open && setMetricsProjectId(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-primary" />
+              Show metrics
+            </DialogTitle>
+            <DialogDescription>
+              Choose which metrics and charts to display on this project dashboard. Turn on or off any section.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[60vh] overflow-y-auto">
+            {metricsProjectId && metricsForm && DASHBOARD_METRIC_IDS.map((id) => (
+              <div
+                key={id}
+                className="flex items-center justify-between gap-4 p-3 rounded-lg glass-subtle border border-border/50"
+              >
+                <span className="text-sm font-medium">{DASHBOARD_METRIC_LABELS[id]}</span>
+                <Switch
+                  checked={metricsForm[id]}
+                  onCheckedChange={(checked) => handleMetricToggle(metricsProjectId, id, checked)}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMetricsProjectId(null)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

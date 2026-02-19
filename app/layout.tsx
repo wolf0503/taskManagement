@@ -8,6 +8,7 @@ import { TasksProvider } from "@/contexts/tasks-context"
 import { ColumnsProvider } from "@/contexts/columns-context"
 import { FiltersProvider } from "@/contexts/filters-context"
 import { Toaster } from "@/components/ui/toaster"
+import { ProjectsErrorBanner } from "@/components/projects-error-banner"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -45,6 +46,7 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         <AuthProvider>
           <ProjectsProvider>
+            <ProjectsErrorBanner />
             <TasksProvider>
               <ColumnsProvider>
                 <FiltersProvider>

@@ -12,6 +12,7 @@ import { useTasks } from "@/contexts/tasks-context"
 import { useColumns } from "@/contexts/columns-context"
 import { projectsService } from "@/services/projects.service"
 import type { Project, ProjectStats } from "@/lib/types"
+import { getDashboardMetrics } from "@/lib/dashboard-metrics"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -133,6 +134,8 @@ export default function DashboardDetailPage() {
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [replyText, setReplyText] = useState("")
   const [replies, setReplies] = useState<Record<number, Array<{ user: string; text: string; time: string }>>>({})
+
+  const metricsConfig = getDashboardMetrics(dashboardId)
 
   // Load tasks and columns for this project so Task Distribution and Progress stay up to date
   useEffect(() => {
@@ -441,7 +444,7 @@ export default function DashboardDetailPage() {
           </Card>
 
           {/* Progress Overview (Chart.js) — uses live task data when available */}
-          {displayStats && (
+          {metricsConfig.progressOverview && displayStats && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Progress Overview</CardTitle>
@@ -469,7 +472,7 @@ export default function DashboardDetailPage() {
           )}
 
           {/* Task Distribution (Chart.js) — one bar per project column, live task data */}
-          {displayStats && (
+          {metricsConfig.taskDistribution && displayStats && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Task Distribution</CardTitle>
@@ -522,7 +525,7 @@ export default function DashboardDetailPage() {
           )}
 
           {/* Performance Metrics (Chart.js) */}
-          {displayStats && (
+          {displayStats && (metricsConfig.timeTracking || metricsConfig.velocity || metricsConfig.teamActivity) && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle>Performance Metrics</CardTitle>
@@ -531,6 +534,7 @@ export default function DashboardDetailPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Time Tracking (Chart.js Doughnut) */}
+                {metricsConfig.timeTracking && (
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
                   <div className="w-[160px] h-[160px] mb-4">
                     <TimeDoughnutChart
@@ -547,8 +551,10 @@ export default function DashboardDetailPage() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Velocity (Chart.js Bar) */}
+                {metricsConfig.velocity && (
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
                   <div className="w-full h-[160px] mb-4">
                     <VelocityBarChart
@@ -562,8 +568,10 @@ export default function DashboardDetailPage() {
                     <div className="text-lg font-bold">{displayStats.velocity}</div>
                   </div>
                 </div>
+                )}
 
                 {/* Team Activity */}
+                {metricsConfig.teamActivity && (
                 <div className="flex flex-col items-center p-4 glass-subtle rounded-lg">
                   <div className="relative w-32 h-32 mb-4 flex items-center justify-center">
                     <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-primary/30 to-accent/30"></div>
@@ -574,12 +582,14 @@ export default function DashboardDetailPage() {
                     <div className="text-lg font-bold">{dashboard.activeMembers} Members</div>
                   </div>
                 </div>
+                )}
               </div>
             </CardContent>
           </Card>
           )}
 
           {/* Comments Section */}
+          {metricsConfig.activityComments && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -703,6 +713,7 @@ export default function DashboardDetailPage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </div>
       </main>
 

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
+import { ApiError } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,8 +37,11 @@ export default function SignInPage() {
     try {
       await login(data.email, data.password)
     } catch (err) {
-      // Error is handled by auth context
-      console.error('Login failed:', err)
+      if (err instanceof ApiError && err.code === 'RATE_LIMIT_EXCEEDED') {
+        console.warn('Login rate limited (429). Try again in a few minutes.')
+      } else {
+        console.error('Login failed:', err)
+      }
     }
   }
 

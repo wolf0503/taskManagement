@@ -130,11 +130,12 @@ class ApiClient {
   }
 
   /**
-   * Make HTTP request with automatic token refresh
+   * Make HTTP request with automatic token refresh and optional 429 retry
    */
   private async request<T = any>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retried429 = false
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
     const headers: HeadersInit = {
@@ -171,6 +172,18 @@ class ApiClient {
           // Refresh failed, will be handled below
           console.error('Token refresh failed:', refreshError)
         }
+      }
+
+      // Handle 429 - Rate limit: retry once after a short wait (skip for auth so user sees error immediately)
+      const isAuthEndpoint = /^\/auth\/(login|register|forgot-password|reset-password)/.test(endpoint)
+      if (response.status === 429 && !retried429 && !isAuthEndpoint) {
+        const retryAfterHeader = response.headers.get('Retry-After')
+        const waitSeconds = Math.min(
+          retryAfterHeader ? parseInt(retryAfterHeader, 10) || 5 : 5,
+          15
+        )
+        await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000))
+        return this.request<T>(endpoint, options, true)
       }
 
       // Parse response (429 may return HTML or non-JSON from some servers)

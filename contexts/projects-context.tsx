@@ -46,7 +46,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         ? err.message
         : 'Failed to load projects'
       setError(errorMessage)
-      console.error('Failed to load projects:', err)
+      const isRateLimit = err instanceof ApiError && err.code === 'RATE_LIMIT_EXCEEDED'
+      if (isRateLimit) {
+        console.warn('Projects: rate limited (429). Use Retry when ready.', err.message)
+      } else {
+        console.error('Failed to load projects:', err)
+      }
     } finally {
       setIsLoading(false)
     }
