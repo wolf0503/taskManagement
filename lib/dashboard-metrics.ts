@@ -10,6 +10,12 @@ export const DASHBOARD_METRIC_IDS = [
   "velocity",
   "teamActivity",
   "activityComments",
+  "summaryStats",
+  "overdueBlockers",
+  "priorityDistribution",
+  "upcomingDeadlines",
+  "projectInfo",
+  "burndown",
 ] as const
 
 export type DashboardMetricId = (typeof DASHBOARD_METRIC_IDS)[number]
@@ -21,6 +27,12 @@ export const DASHBOARD_METRIC_LABELS: Record<DashboardMetricId, string> = {
   velocity: "Velocity",
   teamActivity: "Team Activity",
   activityComments: "Activity & Comments",
+  summaryStats: "Quick Summary",
+  overdueBlockers: "Overdue & Blockers",
+  priorityDistribution: "Tasks by Priority",
+  upcomingDeadlines: "Upcoming Deadlines",
+  projectInfo: "Project Details",
+  burndown: "Burndown Chart",
 }
 
 export interface DashboardMetricsConfig {
@@ -30,6 +42,12 @@ export interface DashboardMetricsConfig {
   velocity: boolean
   teamActivity: boolean
   activityComments: boolean
+  summaryStats: boolean
+  overdueBlockers: boolean
+  priorityDistribution: boolean
+  upcomingDeadlines: boolean
+  projectInfo: boolean
+  burndown: boolean
 }
 
 const DEFAULT_METRICS: DashboardMetricsConfig = {
@@ -39,6 +57,12 @@ const DEFAULT_METRICS: DashboardMetricsConfig = {
   velocity: true,
   teamActivity: true,
   activityComments: true,
+  summaryStats: true,
+  overdueBlockers: true,
+  priorityDistribution: true,
+  upcomingDeadlines: true,
+  projectInfo: true,
+  burndown: false,
 }
 
 const STORAGE_PREFIX = "dashboard-metrics-"

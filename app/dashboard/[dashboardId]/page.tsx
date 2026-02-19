@@ -32,6 +32,10 @@ import {
   Heart,
   FileText,
   Calendar,
+  AlertTriangle,
+  Target,
+  ListTodo,
+  LayoutGrid,
 } from "lucide-react"
 
 const ProgressDoughnutChart = dynamic(
@@ -211,6 +215,41 @@ export default function DashboardDetailPage() {
     }
   }, [dashboard, liveStats])
 
+  // Tasks by priority (for Priority Distribution gadget)
+  const priorityDistribution = useMemo(() => {
+    if (!dashboardId) return { HIGH: 0, MEDIUM: 0, LOW: 0 }
+    const tasks = getTasks(dashboardId)
+    const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 }
+    tasks.forEach((t) => {
+      const p = t.priority ?? "MEDIUM"
+      if (p in counts) counts[p as keyof typeof counts]++
+    })
+    return counts
+  }, [dashboardId, getTasks])
+
+  // Upcoming and overdue tasks (for gadgets)
+  const { upcomingTasks, overdueTasks } = useMemo(() => {
+    if (!dashboardId) return { upcomingTasks: [], overdueTasks: [] }
+    const tasks = getTasks(dashboardId)
+    const columns = getColumns(dashboardId)
+    const doneCol = columns.find((c) => c.title.toLowerCase().includes("done"))
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const upcoming: typeof tasks = []
+    const overdue: typeof tasks = []
+    tasks.forEach((t) => {
+      if (!t.dueDate) return
+      const d = new Date(t.dueDate)
+      d.setHours(0, 0, 0, 0)
+      const isDone = doneCol && t.columnId === doneCol.id
+      if (d < today && !isDone) overdue.push(t)
+      else if (d >= today) upcoming.push(t)
+    })
+    upcoming.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    overdue.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    return { upcomingTasks: upcoming.slice(0, 10), overdueTasks: overdue.slice(0, 10) }
+  }, [dashboardId, getTasks, getColumns])
+
   useEffect(() => {
     if (!dashboardId) return
     const fromContext = getProject(dashboardId)
@@ -385,6 +424,7 @@ export default function DashboardDetailPage() {
         {/* Dashboard Content */}
         <div className="px-4 lg:px-8 pb-6 space-y-6">
           {/* Project data */}
+          {metricsConfig.projectInfo && (
           <Card className="glass border-glass-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -442,6 +482,84 @@ export default function DashboardDetailPage() {
               </div>
             </CardContent>
           </Card>
+          )}
+
+          {/* Quick Summary */}
+          {metricsConfig.summaryStats && displayStats && (
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LayoutGrid className="h-5 w-5" />
+                Quick Summary
+              </CardTitle>
+              <CardDescription>Key numbers at a glance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-4 rounded-lg glass-subtle border border-border/50 text-center">
+                  <div className="text-2xl font-bold text-foreground tabular-nums">{displayStats.totalTasks}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Total tasks</div>
+                </div>
+                <div className="p-4 rounded-lg glass-subtle border border-border/50 text-center">
+                  <div className="text-2xl font-bold text-status-done tabular-nums">{displayStats.tasksCompleted}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Completed</div>
+                </div>
+                <div className="p-4 rounded-lg glass-subtle border border-border/50 text-center">
+                  <div className="text-2xl font-bold text-accent tabular-nums">{displayStats.inProgress}</div>
+                  <div className="text-xs text-muted-foreground mt-1">In progress</div>
+                </div>
+                <div className="p-4 rounded-lg glass-subtle border border-border/50 text-center">
+                  <div className="text-2xl font-bold text-primary tabular-nums">{displayStats.completionRate}%</div>
+                  <div className="text-xs text-muted-foreground mt-1">Completion</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          )}
+
+          {/* Overdue & Blockers */}
+          {metricsConfig.overdueBlockers && displayStats && (
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Overdue & Blockers
+              </CardTitle>
+              <CardDescription>Items needing attention</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {displayStats.blockers > 0 ? (
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <div className="h-12 w-12 rounded-lg bg-destructive/20 flex items-center justify-center">
+                    <span className="text-destructive text-xl font-bold">{displayStats.blockers}</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-destructive">Active Blockers</div>
+                    <div className="text-xs text-muted-foreground">These tasks need immediate attention</div>
+                  </div>
+                </div>
+              ) : null}
+              {overdueTasks.length > 0 ? (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground mb-2">Overdue tasks</div>
+                  <ul className="space-y-2">
+                    {overdueTasks.map((t) => (
+                      <li key={t.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
+                        <span className="truncate flex-1">{t.title}</span>
+                        <span className="text-destructive text-xs shrink-0 ml-2">
+                          {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : ""}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {displayStats.blockers === 0 && overdueTasks.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4 text-center">No overdue tasks or blockers</p>
+              )}
+            </CardContent>
+          </Card>
+          )}
 
           {/* Progress Overview (Chart.js) — uses live task data when available */}
           {metricsConfig.progressOverview && displayStats && (
@@ -509,7 +627,7 @@ export default function DashboardDetailPage() {
                     </>
                   )}
               </div>
-              {displayStats.blockers > 0 && (
+              {displayStats.blockers > 0 && !metricsConfig.overdueBlockers && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20 mt-4">
                   <div className="h-12 w-12 rounded-lg bg-destructive/20 flex items-center justify-center">
                     <span className="text-destructive text-xl font-bold">{displayStats.blockers}</span>
@@ -520,6 +638,84 @@ export default function DashboardDetailPage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+          )}
+
+          {/* Tasks by Priority */}
+          {metricsConfig.priorityDistribution && (
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Tasks by Priority
+              </CardTitle>
+              <CardDescription>Distribution of tasks by priority level</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-center">
+                  <div className="text-2xl font-bold text-destructive tabular-nums">{priorityDistribution.HIGH}</div>
+                  <div className="text-xs text-muted-foreground mt-1">High</div>
+                </div>
+                <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">{priorityDistribution.MEDIUM}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Medium</div>
+                </div>
+                <div className="p-4 rounded-lg bg-muted border border-border text-center">
+                  <div className="text-2xl font-bold text-muted-foreground tabular-nums">{priorityDistribution.LOW}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Low</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          )}
+
+          {/* Upcoming Deadlines */}
+          {metricsConfig.upcomingDeadlines && (
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ListTodo className="h-5 w-5" />
+                Upcoming Deadlines
+              </CardTitle>
+              <CardDescription>Tasks with due dates (nearest first)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {upcomingTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No upcoming deadlines</p>
+              ) : (
+                <ul className="space-y-2">
+                  {upcomingTasks.map((t) => (
+                    <li key={t.id} className="flex items-center justify-between p-2 rounded-md glass-subtle border border-border/50 text-sm">
+                      <span className="truncate flex-1">{t.title}</span>
+                      <span className="text-muted-foreground text-xs shrink-0 ml-2">
+                        {t.dueDate ? new Date(t.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          )}
+
+          {/* Burndown (placeholder) */}
+          {metricsConfig.burndown && (
+          <Card className="glass border-glass-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Burndown Chart
+              </CardTitle>
+              <CardDescription>Remaining work over time</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-12 rounded-lg border border-dashed border-border text-muted-foreground">
+                <BarChart3 className="h-12 w-12 mb-3 opacity-50" />
+                <p className="text-sm font-medium">Burndown chart</p>
+                <p className="text-xs mt-1">Coming soon — track remaining tasks over time</p>
+              </div>
             </CardContent>
           </Card>
           )}
