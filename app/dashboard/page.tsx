@@ -197,7 +197,6 @@ export default function DashboardPage() {
   const { getTasks } = useTasks()
   const { getColumns } = useColumns()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [createDashboardOpen, setCreateDashboardOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<string | null>(null)
   const [statsByProjectId, setStatsByProjectId] = useState<Record<string, ProjectStats>>({})
   const [memberCountByProjectId, setMemberCountByProjectId] = useState<Record<string, number>>({})
@@ -303,11 +302,6 @@ export default function DashboardPage() {
       ...prev,
       [projectId]: ""
     }))
-  }
-
-  const handleCreateDashboard = () => {
-    setCreateDashboardOpen(false)
-    router.push("/projects")
   }
 
   const handleDuplicateDashboard = (projectId: string) => {
@@ -458,7 +452,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground">Analytics and insights for all projects</p>
                 </div>
               </div>
-              <Button className="gap-2" onClick={() => setCreateDashboardOpen(true)}>
+              <Button className="gap-2" onClick={() => router.push("/projects?new=1")}>
                 <Plus className="h-4 w-4" />
                 New Project
               </Button>
@@ -731,32 +725,6 @@ export default function DashboardPage() {
         </div>
         )}
       </main>
-
-      {/* New Project — redirect to Projects page */}
-      <Dialog open={createDashboardOpen} onOpenChange={setCreateDashboardOpen}>
-        <DialogContent className="border-glass-border sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                <Plus className="h-4 w-4 text-primary" />
-              </div>
-              New Project
-            </DialogTitle>
-            <DialogDescription>
-              Dashboards show analytics for your projects. Create a new project from the Projects page to see it here.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateDashboardOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateDashboard}>
-              <FolderKanban className="h-4 w-4 mr-2" />
-              Go to Projects
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Dashboard Dialog */}
       <Dialog open={editingProject !== null} onOpenChange={(open) => !open && setEditingProject(null)}>

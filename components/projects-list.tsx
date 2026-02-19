@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText, LayoutGrid, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -38,12 +38,21 @@ const statusConfig = {
 
 export function ProjectsList() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { projects } = useProjects()
   const { getTasks } = useTasks()
   const { getColumns } = useColumns()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({})
+
+  // Open New Project dialog when navigating from Dashboard with ?new=1
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setIsDialogOpen(true)
+      router.replace("/projects", { scroll: false })
+    }
+  }, [searchParams, router])
 
   // Fetch project member count for each project
   useEffect(() => {
