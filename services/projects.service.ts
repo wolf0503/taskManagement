@@ -111,10 +111,15 @@ class ProjectsService {
    * Get project members
    */
   async getProjectMembers(projectId: string): Promise<ProjectMember[]> {
-    const response = await apiClient.get<ProjectMember[]>(
+    const response = await apiClient.get<ProjectMember[] | { members?: ProjectMember[] }>(
       API_ENDPOINTS.PROJECTS.MEMBERS(projectId)
     )
-    return response.data || []
+    const raw = response.data
+    if (Array.isArray(raw)) return raw
+    if (raw && typeof raw === 'object' && Array.isArray((raw as { members?: ProjectMember[] }).members)) {
+      return (raw as { members: ProjectMember[] }).members
+    }
+    return []
   }
 
   /**

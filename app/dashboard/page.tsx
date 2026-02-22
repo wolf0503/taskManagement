@@ -171,7 +171,7 @@ function mapProjectToDashboard(
   const totalTasks = stats?.totalTasks ?? clientStats?.totalTasks ?? project.taskCount ?? 0
   const completedTasks = stats?.completedTasks ?? clientStats?.completedTasks ?? project.completedTasks ?? 0
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-  const color = project.color && project.color.startsWith("bg-") ? project.color : CHART_COLORS[0]
+  const color = project.color?.trim() || CHART_COLORS[0]
   return {
     id: project.id,
     name: project.name,
@@ -638,7 +638,13 @@ export default function DashboardPage() {
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className={cn("h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0", project.color)}>
+                        <div
+                          className={cn(
+                            "h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0",
+                            project.color?.startsWith("#") ? "" : project.color
+                          )}
+                          style={project.color?.startsWith("#") ? { backgroundColor: project.color } : undefined}
+                        >
                           <FolderKanban className="h-5 w-5 text-white" />
                         </div>
                         <div className="min-w-0">

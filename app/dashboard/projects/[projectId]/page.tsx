@@ -13,6 +13,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
 import { projectsService } from "@/services/projects.service"
+import { usersService } from "@/services/users.service"
 
 function mapMembersToTeamMembers(members: ProjectMember[]): { id: string; name: string; avatar: string }[] {
   return members.map((m) => {
@@ -55,12 +56,36 @@ export default function ProjectDetailPage() {
   }, [projectId, getProject, projectsLoading, router])
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId || !project) return
     projectsService
       .getProjectMembers(projectId)
+      .then(async (m) => {
+        if (project.ownerId && !m.some((x) => x.userId === project.ownerId)) {
+          const users = await usersService.getUsers().catch(() => [])
+          const ownerUser = users.find((u) => u.id === project.ownerId)
+          if (ownerUser) {
+            return [{
+              id: project.ownerId,
+              userId: project.ownerId,
+              projectId,
+              role: "OWNER",
+              joinedAt: new Date().toISOString(),
+              user: {
+                id: ownerUser.id,
+                email: ownerUser.email ?? "",
+                firstName: ownerUser.firstName ?? "",
+                lastName: ownerUser.lastName ?? "",
+                avatar: ownerUser.avatar ?? null,
+                status: ownerUser.status,
+              },
+            }, ...m]
+          }
+        }
+        return m
+      })
       .then(setMembers)
       .catch(() => setMembers([]))
-  }, [projectId])
+  }, [projectId, project])
 
   const teamMembers = useMemo(() => mapMembersToTeamMembers(members), [members])
   const projectWithMembers = useMemo(

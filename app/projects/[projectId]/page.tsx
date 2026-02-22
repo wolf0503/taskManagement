@@ -15,6 +15,7 @@ import { useProjects } from "@/contexts/projects-context"
 import { useColumns } from "@/contexts/columns-context"
 import { useTasks } from "@/contexts/tasks-context"
 import { projectsService } from "@/services/projects.service"
+import { usersService } from "@/services/users.service"
 
 function mapMembersToTeamMembers(members: ProjectMember[]): { id: string; name: string; avatar: string }[] {
   return members.map((m) => {
@@ -58,9 +59,29 @@ export default function ProjectDetailPage() {
           setProject(fromContext)
           setFetchingProject(false)
         }
-        await projectsService.getProjectMembers(projectId).then((m) => {
-          if (!cancelled) setMembers(m)
-        }).catch(() => { if (!cancelled) setMembers([]) })
+        let m = await projectsService.getProjectMembers(projectId).catch(() => [])
+        if (fromContext.ownerId && !m.some((x) => x.userId === fromContext.ownerId)) {
+          const users = await usersService.getUsers().catch(() => [])
+          const ownerUser = users.find((u) => u.id === fromContext.ownerId)
+          if (ownerUser) {
+            m = [{
+              id: fromContext.ownerId,
+              userId: fromContext.ownerId,
+              projectId: projectId,
+              role: "OWNER",
+              joinedAt: new Date().toISOString(),
+              user: {
+                id: ownerUser.id,
+                email: ownerUser.email ?? "",
+                firstName: ownerUser.firstName ?? "",
+                lastName: ownerUser.lastName ?? "",
+                avatar: ownerUser.avatar ?? null,
+                status: ownerUser.status,
+              },
+            }, ...m]
+          }
+        }
+        if (!cancelled) setMembers(m)
         if (cancelled) return
         fetchColumns(projectId, false)
         loadProjectTasks(projectId)
@@ -72,7 +93,28 @@ export default function ProjectDetailPage() {
         const p = await projectsService.getProject(projectId)
         if (cancelled) return
         setProject(p)
-        const m = await projectsService.getProjectMembers(projectId).catch(() => [])
+        let m = await projectsService.getProjectMembers(projectId).catch(() => [])
+        if (p.ownerId && !m.some((x) => x.userId === p.ownerId)) {
+          const users = await usersService.getUsers().catch(() => [])
+          const ownerUser = users.find((u) => u.id === p.ownerId)
+          if (ownerUser) {
+            m = [{
+              id: p.ownerId,
+              userId: p.ownerId,
+              projectId: projectId,
+              role: "OWNER",
+              joinedAt: new Date().toISOString(),
+              user: {
+                id: ownerUser.id,
+                email: ownerUser.email ?? "",
+                firstName: ownerUser.firstName ?? "",
+                lastName: ownerUser.lastName ?? "",
+                avatar: ownerUser.avatar ?? null,
+                status: ownerUser.status,
+              },
+            }, ...m]
+          }
+        }
         if (!cancelled) setMembers(m)
         if (cancelled) return
         fetchColumns(projectId, false)
