@@ -17,7 +17,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { 
   BarChart3, 
   TrendingUp, 
@@ -36,6 +46,7 @@ import {
   Target,
   ListTodo,
   LayoutGrid,
+  Edit,
 } from "lucide-react"
 
 const ProgressDoughnutChart = dynamic(
@@ -126,12 +137,15 @@ export default function DashboardDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const { getProject } = useProjects()
+  const { getProject, updateProject } = useProjects()
   const { getTasks, loadProjectTasks } = useTasks()
   const { getColumns, fetchColumns } = useColumns()
   const dashboardId = params.dashboardId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [dashboard, setDashboard] = useState<Record<string, any> | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editName, setEditName] = useState("")
+  const [editDescription, setEditDescription] = useState("")
   const [commentText, setCommentText] = useState("")
   const [comments, setComments] = useState<any[]>([])
   const [likedComments, setLikedComments] = useState<Set<number>>(new Set())
@@ -333,6 +347,27 @@ export default function DashboardDetailPage() {
     toast({ title: "Reply posted" })
   }
 
+  const openEditDialog = () => {
+    setEditName(dashboard?.name ?? "")
+    setEditDescription(dashboard?.description ?? "")
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!dashboardId || !editName.trim()) return
+    try {
+      await updateProject(dashboardId, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+      })
+      setDashboard((prev) => prev ? { ...prev, name: editName.trim(), description: editDescription.trim() } : null)
+      setEditDialogOpen(false)
+      toast({ title: "Dashboard updated" })
+    } catch {
+      toast({ title: "Error", description: "Failed to update dashboard.", variant: "destructive" })
+    }
+  }
+
   if (!dashboard) {
     return (
       <div className="min-h-screen animated-gradient-bg flex items-center justify-center">
@@ -401,6 +436,15 @@ export default function DashboardDetailPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={openEditDialog}
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
                 <Badge variant="secondary" className="gap-1 font-medium">
                   <FileText className="h-3 w-3" />
                   {dashboard.statusLabel ?? dashboard.status}
@@ -420,6 +464,48 @@ export default function DashboardDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Edit Dashboard Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="h-4 w-4 text-primary" />
+                Edit Dashboard
+              </DialogTitle>
+              <DialogDescription>Change the dashboard name and description.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Dashboard name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-desc">Description</Label>
+                <Textarea
+                  id="edit-desc"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Description"
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSaveEdit} disabled={!editName.trim()}>
+                <Edit className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Dashboard Content */}
         <div className="px-4 lg:px-8 pb-6 space-y-6">

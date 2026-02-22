@@ -6,6 +6,7 @@ import { TaskBoard } from "@/components/task-board"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { AddProjectMembersDialog } from "@/components/add-project-members-dialog"
+import { EditProjectDialog } from "@/components/edit-project-dialog"
 import { cn } from "@/lib/utils"
 import type { Project, ProjectMember } from "@/lib/types"
 import { ArrowLeft } from "lucide-react"
@@ -29,6 +30,7 @@ export default function ProjectDetailPage() {
   const projectId = params.projectId as string
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [addMembersOpen, setAddMembersOpen] = useState(false)
+  const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [members, setMembers] = useState<ProjectMember[]>([])
   const { getProject, isLoading: projectsLoading } = useProjects()
   const [project, setProject] = useState<Project | null>(null)
@@ -117,6 +119,7 @@ export default function ProjectDetailPage() {
           project={projectWithMembers ?? project}
           projectId={projectId}
           onAddMembersClick={() => setAddMembersOpen(true)}
+          onEditClick={() => setEditProjectOpen(true)}
         />
         <TaskBoard projectId={projectId} />
       </main>
@@ -126,6 +129,12 @@ export default function ProjectDetailPage() {
         open={addMembersOpen}
         onOpenChange={setAddMembersOpen}
         onMembersChange={setMembers}
+      />
+      <EditProjectDialog
+        open={editProjectOpen}
+        onOpenChange={setEditProjectOpen}
+        project={project}
+        onSuccess={() => { const updated = getProject(projectId); if (updated) setProject(updated); }}
       />
     </div>
   )

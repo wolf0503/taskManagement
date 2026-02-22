@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Plus, Clock, CheckCircle2, Pause, FileText, X, UserPlus } from "lucide-react"
+import { Plus, Clock, CheckCircle2, Pause, FileText, X, UserPlus, Edit } from "lucide-react"
 import type { Project, ProjectMember } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { AddTaskDialog } from "@/components/add-task-dialog"
@@ -39,9 +39,11 @@ interface HeaderProps {
   /** Pass to avoid refetching members when opening Add Task (reduces 429 risk) */
   projectMembers?: ProjectMember[]
   onAddMembersClick?: () => void
+  /** When provided, shows an Edit button that calls this callback */
+  onEditClick?: () => void
 }
 
-export function Header({ project, projectId, projectMembers, onAddMembersClick }: HeaderProps) {
+export function Header({ project, projectId, projectMembers, onAddMembersClick, onEditClick }: HeaderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { getFilters, setFilters, clearFilters } = useFilters()
   const filters = projectId ? getFilters(projectId) : { assignees: [], priority: null, showAll: true }
@@ -179,6 +181,17 @@ export function Header({ project, projectId, projectMembers, onAddMembersClick }
             )}
           </div>
 
+          {/* Edit Project */}
+          {onEditClick && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={onEditClick}
+            >
+              <Edit className="h-4 w-4" />
+              <span className="hidden sm:inline">Edit</span>
+            </Button>
+          )}
           {/* Add Task */}
           <Button
             className="gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"

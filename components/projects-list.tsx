@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText, LayoutGrid, List } from "lucide-react"
+import { Plus, FolderKanban, Users, CheckCircle2, Clock, Pause, FileText, LayoutGrid, List, MoreVertical, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
@@ -12,6 +12,13 @@ import { useTasks } from "@/contexts/tasks-context"
 import { useColumns } from "@/contexts/columns-context"
 import { projectsService } from "@/services/projects.service"
 import { AddProjectDialog } from "@/components/add-project-dialog"
+import { EditProjectDialog } from "@/components/edit-project-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const statusConfig = {
   "IN_PROGRESS": {
@@ -36,6 +43,33 @@ const statusConfig = {
   },
 }
 
+// Fallback palette when project.color is missing or invalid (hex only)
+const PROJECT_COLOR_PALETTE = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#EF4444"]
+
+function getProjectColorStyles(project: { color?: string }, index: number) {
+  const raw = project.color?.trim()
+  const isHex = raw?.startsWith("#")
+  const fallbackHex = PROJECT_COLOR_PALETTE[index % PROJECT_COLOR_PALETTE.length]
+  const accentHex = isHex ? raw! : fallbackHex
+
+  let iconClassName: string | undefined
+  let iconStyle: { backgroundColor: string } | undefined
+  if (isHex) {
+    iconStyle = { backgroundColor: raw }
+  } else if (raw && raw.startsWith("bg-")) {
+    iconClassName = raw
+  } else {
+    iconStyle = { backgroundColor: fallbackHex }
+  }
+
+  return {
+    iconClassName,
+    iconStyle,
+    accentHex,
+    progressStyle: { backgroundColor: accentHex },
+  }
+}
+
 export function ProjectsList() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -43,6 +77,7 @@ export function ProjectsList() {
   const { getTasks } = useTasks()
   const { getColumns } = useColumns()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<typeof projectsWithStats[0] | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({})
 
@@ -160,23 +195,31 @@ export function ProjectsList() {
           ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           : "space-y-4"
       )}>
-        {projectsWithStats.map((project) => {
+        {projectsWithStats.map((project, index) => {
           const statusInfo = statusConfig[project.status]
           const StatusIcon = statusInfo.icon
           const progress = project.taskCount > 0
             ? Math.round((project.completedTasks || 0) / project.taskCount * 100)
             : 0
+          const colorStyles = getProjectColorStyles(project, index)
 
           return viewMode === "grid" ? (
             <div
               key={project.id}
               onClick={() => handleProjectClick(project.id)}
-              className="glass rounded-2xl p-6 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl card-hover group"
+              className="glass rounded-2xl p-6 cursor-pointer transition-all hover:scale-[1.02] hover:shadow-xl card-hover group border-l-4"
+              style={{
+                borderLeftColor: colorStyles.accentHex,
+                backgroundColor: `${colorStyles.accentHex}0D`,
+              }}
             >
               {/* Project Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", project.color)}>
+                  <div
+                    className={cn("w-12 h-12 rounded-xl flex items-center justify-center", colorStyles.iconClassName)}
+                    style={colorStyles.iconStyle}
+                  >
                     <FolderKanban className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -191,6 +234,19 @@ export function ProjectsList() {
                     </div>
                   </div>
                 </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="glass border-glass-border">
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project); }}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Description */}
@@ -207,8 +263,8 @@ export function ProjectsList() {
                   </div>
                   <div className="h-2 bg-secondary rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${progress}%` }}
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${progress}%`, ...colorStyles.progressStyle }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
@@ -223,8 +279,8 @@ export function ProjectsList() {
                   </div>
                   <div className="h-2 bg-secondary rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: "0%" }}
+                      className="h-full rounded-full transition-all"
+                      style={{ width: "0%", ...colorStyles.progressStyle }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
@@ -279,10 +335,17 @@ export function ProjectsList() {
             <div
               key={project.id}
               onClick={() => handleProjectClick(project.id)}
-              className="glass rounded-xl p-4 cursor-pointer transition-all hover:border-primary/50 group"
+              className="glass rounded-xl p-4 cursor-pointer transition-all hover:border-primary/50 group border-l-4"
+              style={{
+                borderLeftColor: colorStyles.accentHex,
+                backgroundColor: `${colorStyles.accentHex}0D`,
+              }}
             >
               <div className="flex items-center gap-4">
-                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", project.color)}>
+                <div
+                  className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", colorStyles.iconClassName)}
+                  style={colorStyles.iconStyle}
+                >
                   <FolderKanban className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -299,6 +362,19 @@ export function ProjectsList() {
                   </p>
                 </div>
                 <div className="flex items-center gap-6 flex-shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="glass border-glass-border">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditingProject(project); }}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <div className="text-center">
                     <div className="text-sm font-medium">{project.taskCount}</div>
                     <div className="text-xs text-muted-foreground">Tasks</div>
@@ -373,6 +449,12 @@ export function ProjectsList() {
 
       {/* Add Project Dialog */}
       <AddProjectDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      {/* Edit Project Dialog */}
+      <EditProjectDialog
+        open={!!editingProject}
+        onOpenChange={(open) => !open && setEditingProject(null)}
+        project={editingProject}
+      />
     </div>
   )
 }

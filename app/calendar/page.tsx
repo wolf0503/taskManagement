@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   AlertCircle,
   MoreVertical,
+  Edit,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -70,6 +71,17 @@ export default function CalendarPage() {
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [editEvent, setEditEvent] = useState({
+    title: "",
+    type: "meeting" as CalendarEvent["type"],
+    date: "",
+    time: "",
+    duration: "",
+    location: "",
+    project: "",
+  })
   const [newEvent, setNewEvent] = useState({
     title: "",
     type: "meeting" as CalendarEvent["type"],
@@ -240,6 +252,43 @@ export default function CalendarPage() {
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Failed to duplicate event"
       toast({ title: "Error", description: message, variant: "destructive" })
+    }
+  }
+
+  const openEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event)
+    setEditEvent({
+      title: event.title,
+      type: event.type,
+      date: event.date,
+      time: event.time || "",
+      duration: event.duration || "",
+      location: event.location || "",
+      project: event.project || "",
+    })
+  }
+
+  const handleUpdateEvent = async () => {
+    if (!editingEvent || !editEvent.title || !editEvent.date) return
+    setIsUpdating(true)
+    try {
+      const updated = await calendarEventsService.updateEvent(editingEvent.id, {
+        title: editEvent.title,
+        type: editEvent.type,
+        date: editEvent.date,
+        time: editEvent.time || undefined,
+        duration: editEvent.duration || undefined,
+        location: editEvent.location || undefined,
+        project: editEvent.project || undefined,
+      })
+      setEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updated : e)))
+      setEditingEvent(null)
+      toast({ title: "Event updated", description: "The event has been saved." })
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Failed to update event"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -439,7 +488,7 @@ export default function CalendarPage() {
                                   <DropdownMenuItem onClick={() => alert(`Event: ${event.title}\nDate: ${event.date}\nTime: ${event.time}`)}>
                                     View Details
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => alert('Edit feature coming soon')}>
+                                  <DropdownMenuItem onClick={() => openEditEvent(event)}>
                                     Edit Event
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleDuplicateEvent(event.id)}>
@@ -598,7 +647,7 @@ export default function CalendarPage() {
                             <DropdownMenuItem onClick={() => alert(`Event: ${event.title}\nDate: ${event.date}\nTime: ${event.time}`)}>
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => alert('Edit feature coming soon')}>
+                            <DropdownMenuItem onClick={() => openEditEvent(event)}>
                               Edit Event
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDuplicateEvent(event.id)}>
@@ -738,6 +787,110 @@ export default function CalendarPage() {
             >
               <Plus className="h-4 w-4 mr-2" />
               {isCreating ? "Creating…" : "Create Event"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-4 w-4 text-primary" />
+              Edit Event
+            </DialogTitle>
+            <DialogDescription>Update the event details.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-event-title">Title *</Label>
+              <Input
+                id="edit-event-title"
+                value={editEvent.title}
+                onChange={(e) => setEditEvent({ ...editEvent, title: e.target.value })}
+                placeholder="Event title"
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-event-type">Type</Label>
+              <Select
+                value={editEvent.type}
+                onValueChange={(v) => setEditEvent({ ...editEvent, type: v as CalendarEvent["type"] })}
+              >
+                <SelectTrigger id="edit-event-type" className="glass-subtle border-glass-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass border-glass-border">
+                  <SelectItem value="meeting">Meeting</SelectItem>
+                  <SelectItem value="deadline">Deadline</SelectItem>
+                  <SelectItem value="task">Task</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-event-date">Date *</Label>
+                <Input
+                  id="edit-event-date"
+                  type="date"
+                  value={editEvent.date}
+                  onChange={(e) => setEditEvent({ ...editEvent, date: e.target.value })}
+                  className="glass-subtle border-glass-border"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-event-time">Time</Label>
+                <Input
+                  id="edit-event-time"
+                  placeholder="09:00 AM"
+                  value={editEvent.time}
+                  onChange={(e) => setEditEvent({ ...editEvent, time: e.target.value })}
+                  className="glass-subtle border-glass-border"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-event-duration">Duration</Label>
+              <Input
+                id="edit-event-duration"
+                placeholder="1 hour"
+                value={editEvent.duration}
+                onChange={(e) => setEditEvent({ ...editEvent, duration: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-event-location">Location</Label>
+              <Input
+                id="edit-event-location"
+                placeholder="Zoom, Conference Room A, etc."
+                value={editEvent.location}
+                onChange={(e) => setEditEvent({ ...editEvent, location: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-event-project">Project</Label>
+              <Input
+                id="edit-event-project"
+                placeholder="Project name"
+                value={editEvent.project}
+                onChange={(e) => setEditEvent({ ...editEvent, project: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingEvent(null)}>Cancel</Button>
+            <Button
+              onClick={handleUpdateEvent}
+              disabled={!editEvent.title || !editEvent.date || isUpdating}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              {isUpdating ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
