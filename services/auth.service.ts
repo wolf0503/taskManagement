@@ -89,6 +89,24 @@ class AuthService {
   }
 
   /**
+   * Update current user profile (partial update)
+   */
+  async updateProfile(data: Partial<Pick<User, 'firstName' | 'lastName' | 'email' | 'phone' | 'bio' | 'location' | 'avatar'>>): Promise<User> {
+    const response = await apiClient.patch<User>(API_ENDPOINTS.AUTH.ME, data)
+    return response.data!
+  }
+
+  /**
+   * Upload avatar (multipart/form-data with field "avatar")
+   */
+  async uploadAvatar(file: File): Promise<User> {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const response = await apiClient.post<User>(API_ENDPOINTS.AUTH.UPLOAD_AVATAR, formData)
+    return response.data!
+  }
+
+  /**
    * Refresh access token
    */
   async refreshToken(): Promise<string> {

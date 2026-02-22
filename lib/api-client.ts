@@ -138,8 +138,9 @@ class ApiClient {
     retried429 = false
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
+    const isFormData = options.body instanceof FormData
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers as Record<string, string> || {}),
     }
 
@@ -163,7 +164,7 @@ class ApiClient {
           
           // Retry original request with new token
           const retryHeaders: Record<string, string> = {
-            'Content-Type': 'application/json',
+            ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
             ...(options.headers as Record<string, string> || {}),
             'Authorization': `Bearer ${this.accessToken}`,
           }
@@ -255,7 +256,7 @@ class ApiClient {
   async post<T = any>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined,
     })
   }
 

@@ -130,13 +130,23 @@ export default function Home() {
 
             {/* Right side - User menu */}
             <div className="flex items-center gap-3">
-              <Button
+                <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => router.push("/settings")}
                 className="hidden sm:inline-flex"
+                title="Application settings"
               >
                 <Settings className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/account")}
+                className="hidden sm:inline-flex"
+                title="Account settings"
+              >
+                <User className="h-5 w-5" />
               </Button>
 
               <DropdownMenu>
@@ -170,11 +180,11 @@ export default function Home() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/settings")}>
                     <Settings className="mr-2 h-4 w-4" />
-                    Settings
+                    Application settings
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push("/settings")}>
+                  <DropdownMenuItem onClick={() => router.push("/account")}>
                     <User className="mr-2 h-4 w-4" />
-                    Profile
+                    Account settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

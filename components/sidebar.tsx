@@ -9,6 +9,7 @@ import {
   Calendar,
   Users,
   Settings,
+  User,
   ChevronLeft,
   Plus,
   Search,
@@ -226,13 +227,13 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  router.push("/settings?tab=account")
+                  router.push("/account")
                   setMobileOpen(false)
                 }}
                 className="cursor-pointer"
               >
-                <Settings className="mr-2 h-4 w-4" />
-                Account settings and preferences
+                <User className="mr-2 h-4 w-4" />
+                Account settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
