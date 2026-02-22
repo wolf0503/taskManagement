@@ -47,10 +47,15 @@ interface SidebarProps {
 export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: SidebarProps = {}) {
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { projects } = useProjects()
+
+  const filteredProjects = searchQuery.trim()
+    ? projects.filter((p) => p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : projects
 
   const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : ""
   const initials = displayName
@@ -115,14 +120,17 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
           </Button>
         </div>
 
-        {/* Search */}
-        <div className={cn("px-4 mb-4 transition-opacity", collapsed && "opacity-0")}>
+        {/* Search — filters projects list below */}
+        <div className={cn("px-4 mb-4 transition-opacity", collapsed && "opacity-0 pointer-events-none")}>
           <div className="glass-subtle rounded-xl flex items-center gap-2 px-3 py-2.5">
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               type="text"
-              placeholder="Search..."
-              className="bg-transparent border-none outline-none text-sm w-full placeholder:text-muted-foreground"
+              placeholder="Search projects..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent border-none outline-none text-sm w-full min-w-0 placeholder:text-muted-foreground"
+              aria-label="Search projects"
             />
           </div>
         </div>
@@ -172,7 +180,12 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
             </Button>
           </div>
           <div className="space-y-1 max-h-[min(14rem,35vh)] overflow-y-auto overflow-x-hidden pr-1">
-            {projects.map((project, i) => {
+            {filteredProjects.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                {searchQuery.trim() ? "No projects match your search" : "No projects yet"}
+              </p>
+            ) : (
+            filteredProjects.map((project, i) => {
               const colorClass = project.color?.startsWith("#") ? undefined : (project.color || chartColors[i % chartColors.length])
               const colorStyle = project.color?.startsWith("#") ? { backgroundColor: project.color } : undefined
               return (
@@ -191,7 +204,8 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
                   <span className="truncate">{project.name}</span>
                 </button>
               )
-            })}
+            })
+            )}
           </div>
         </div>
 
