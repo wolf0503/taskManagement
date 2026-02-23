@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
+import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -21,6 +22,9 @@ import {
   Download,
   Grid3x3,
   List,
+  Pencil,
+  ListTodo,
+  Trash2,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -78,11 +82,25 @@ function mergeWithLocal(apiList: TeamMember[], localAdded: TeamMember[]): TeamMe
 }
 
 export default function TeamsPage() {
+  const { user, getAvatarUrl } = useAuth()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
+  const [profileMember, setProfileMember] = useState<TeamMember | null>(null)
+  const [messageMember, setMessageMember] = useState<TeamMember | null>(null)
+  const [assignTaskMember, setAssignTaskMember] = useState<TeamMember | null>(null)
+  const [removeMember, setRemoveMember] = useState<TeamMember | null>(null)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: "",
+    role: "",
+    email: "",
+    phone: "",
+    location: "",
+    department: "",
+  })
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [membersLoading, setMembersLoading] = useState(true)
   const [membersError, setMembersError] = useState<string | null>(null)
@@ -143,6 +161,29 @@ export default function TeamsPage() {
     }
   }
 
+  /** Use fresh avatar from auth for current user so Team shows updated photo after profile change */
+  const getMemberAvatarUrl = (member: TeamMember): string => {
+    if (user && (member.id === user.id || member.email === user.email)) {
+      return getAvatarUrl() ?? member.avatar
+    }
+    return member.avatar
+  }
+
+  /** First letter of first name + first letter of last name, e.g. "John Smith" → "JS" */
+  const getMemberInitials = (member: TeamMember): string => {
+    const parts = member.name.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return "?"
+    const first = parts[0][0] ?? ""
+    const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : first
+    return (first + last).toUpperCase()
+  }
+
+  /** True if we have a real avatar URL to show (not placeholder) */
+  const hasRealAvatar = (member: TeamMember): boolean => {
+    const url = getMemberAvatarUrl(member)
+    return Boolean(url && !url.includes("placeholder"))
+  }
+
   const handleAddMember = () => {
     // Create a new member object with all required fields
     const currentDate = new Date()
@@ -185,39 +226,72 @@ export default function TeamsPage() {
 
   const handleViewProfile = (memberId: string) => {
     const member = teamMembers.find((m: TeamMember) => m.id === memberId)
-    if (member) {
-      alert(`Profile: ${member.name}\nRole: ${member.role}\nEmail: ${member.email}\nPhone: ${member.phone}\nLocation: ${member.location}\nDepartment: ${member.department}\nJoined: ${member.joinedDate}\nTasks Completed: ${member.tasksCompleted}`)
-    }
+    if (member) setProfileMember(member)
   }
 
   const handleSendMessage = (memberId: string) => {
     const member = teamMembers.find((m: TeamMember) => m.id === memberId)
-    if (member) {
-      window.location.href = `mailto:${member.email}?subject=Message from Team`
+    if (member) setMessageMember(member)
+  }
+
+  const handleConfirmSendMessage = () => {
+    if (messageMember) {
+      window.location.href = `mailto:${messageMember.email}?subject=Message from Team`
+      setMessageMember(null)
     }
   }
 
   const handleAssignTask = (memberId: string) => {
     const member = teamMembers.find((m: TeamMember) => m.id === memberId)
-    if (member) {
-      alert(`Assign task to ${member.name}\n\nThis feature will open a task assignment dialog.`)
-    }
+    if (member) setAssignTaskMember(member)
+  }
+
+  const handleRemoveMemberConfirm = () => {
+    if (!removeMember) return
+    const memberId = removeMember.id
+    const nextList = teamMembers.filter((m: TeamMember) => m.id !== memberId)
+    setTeamMembers(nextList)
+    saveLocalTeamMembersAdded(nextList.filter((m) => m.id.startsWith("local-")))
+    setRemoveMember(null)
   }
 
   const handleEditMember = (memberId: string) => {
     const member = teamMembers.find((m: TeamMember) => m.id === memberId)
     if (member) {
-      alert(`Edit member: ${member.name}\n\nThis feature will open an edit dialog to modify member details.`)
+      setEditingMember(member)
+      setEditForm({
+        name: member.name,
+        role: member.role,
+        email: member.email,
+        phone: member.phone === "—" ? "" : member.phone,
+        location: member.location === "—" ? "" : member.location,
+        department: member.department,
+      })
     }
   }
 
-  const handleDeleteMember = (memberId: string) => {
-    if (confirm('Are you sure you want to remove this team member?')) {
-      const nextList = teamMembers.filter((m: TeamMember) => m.id !== memberId)
-      setTeamMembers(nextList)
-      // Persist: only keep locally-added members that remain in the list
-      saveLocalTeamMembersAdded(nextList.filter((m) => m.id.startsWith("local-")))
+  const handleSaveEditMember = () => {
+    if (!editingMember) return
+    const updated: TeamMember = {
+      ...editingMember,
+      name: editForm.name.trim(),
+      role: editForm.role.trim(),
+      email: editForm.email.trim(),
+      phone: editForm.phone.trim() || "—",
+      location: editForm.location.trim() || "—",
+      department: editForm.department,
     }
+    const nextList = teamMembers.map((m) => (m.id === editingMember.id ? updated : m))
+    setTeamMembers(nextList)
+    const localAdded = getLocalTeamMembersAdded()
+    const updatedLocal = localAdded.map((m) => (m.id === editingMember.id ? updated : m))
+    saveLocalTeamMembersAdded(updatedLocal)
+    setEditingMember(null)
+  }
+
+  const handleDeleteMember = (memberId: string) => {
+    const member = teamMembers.find((m: TeamMember) => m.id === memberId)
+    if (member) setRemoveMember(member)
   }
 
   return (
@@ -369,12 +443,9 @@ export default function TeamsPage() {
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           <Avatar className="h-12 w-12 ring-2 ring-background">
-                            <AvatarImage src={member.avatar} />
-                            <AvatarFallback className="bg-primary/20 text-primary">
-                              {member.name
-                                .split(" ")
-                                .map((n: string) => n[0])
-                                .join("")}
+                            <AvatarImage src={hasRealAvatar(member) ? getMemberAvatarUrl(member) : undefined} />
+                            <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
+                              {getMemberInitials(member)}
                             </AvatarFallback>
                           </Avatar>
                           <div
@@ -476,12 +547,9 @@ export default function TeamsPage() {
                     <div className="flex items-center gap-4">
                       <div className="relative">
                         <Avatar className="h-14 w-14 ring-2 ring-background">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback className="bg-primary/20 text-primary">
-                            {member.name
-                              .split(" ")
-                              .map((n: string) => n[0])
-                              .join("")}
+                          <AvatarImage src={hasRealAvatar(member) ? getMemberAvatarUrl(member) : undefined} />
+                          <AvatarFallback className="bg-primary/20 text-primary text-base font-medium">
+                            {getMemberInitials(member)}
                           </AvatarFallback>
                         </Avatar>
                         <div
@@ -655,6 +723,300 @@ export default function TeamsPage() {
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Message Dialog */}
+      <Dialog open={!!messageMember} onOpenChange={(open) => !open && setMessageMember(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Send Message</DialogTitle>
+            <DialogDescription>
+              {messageMember
+                ? `Open your email client to send a message to ${messageMember.name}.`
+                : "Open your email client to send a message."}
+            </DialogDescription>
+          </DialogHeader>
+          {messageMember && (
+            <div className="flex items-center gap-3 py-2">
+              <Avatar className="h-10 w-10 ring-2 ring-background shrink-0">
+                <AvatarImage src={hasRealAvatar(messageMember) ? getMemberAvatarUrl(messageMember) : undefined} />
+                <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
+                  {getMemberInitials(messageMember)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="font-medium truncate">{messageMember.name}</p>
+                <p className="text-sm text-muted-foreground truncate">{messageMember.email}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMessageMember(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmSendMessage} className="bg-primary hover:bg-primary/90">
+              <Mail className="h-4 w-4 mr-2" />
+              Open email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Task Dialog */}
+      <Dialog open={!!assignTaskMember} onOpenChange={(open) => !open && setAssignTaskMember(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Assign Task</DialogTitle>
+            <DialogDescription>
+              {assignTaskMember
+                ? `Assign a task to ${assignTaskMember.name}. This feature will open the task assignment flow.`
+                : "Assign a task to this team member."}
+            </DialogDescription>
+          </DialogHeader>
+          {assignTaskMember && (
+            <div className="flex items-center gap-3 py-2">
+              <Avatar className="h-10 w-10 ring-2 ring-background shrink-0">
+                <AvatarImage src={hasRealAvatar(assignTaskMember) ? getMemberAvatarUrl(assignTaskMember) : undefined} />
+                <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
+                  {getMemberInitials(assignTaskMember)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="font-medium truncate">{assignTaskMember.name}</p>
+                <p className="text-sm text-muted-foreground">{assignTaskMember.role}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignTaskMember(null)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => setAssignTaskMember(null)}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <ListTodo className="h-4 w-4 mr-2" />
+              Assign task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Member Confirmation Dialog */}
+      <Dialog open={!!removeMember} onOpenChange={(open) => !open && setRemoveMember(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Remove Team Member</DialogTitle>
+            <DialogDescription>
+              {removeMember
+                ? `Are you sure you want to remove ${removeMember.name} from the team? This action cannot be undone.`
+                : "Are you sure you want to remove this team member?"}
+            </DialogDescription>
+          </DialogHeader>
+          {removeMember && (
+            <div className="flex items-center gap-3 py-2">
+              <Avatar className="h-10 w-10 ring-2 ring-background shrink-0">
+                <AvatarImage src={hasRealAvatar(removeMember) ? getMemberAvatarUrl(removeMember) : undefined} />
+                <AvatarFallback className="bg-primary/20 text-primary text-sm font-medium">
+                  {getMemberInitials(removeMember)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="font-medium truncate">{removeMember.name}</p>
+                <p className="text-sm text-muted-foreground truncate">{removeMember.email}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveMember(null)}>
+              No
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRemoveMemberConfirm}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Yes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Profile Dialog */}
+      <Dialog open={!!profileMember} onOpenChange={(open) => !open && setProfileMember(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Profile</DialogTitle>
+            <DialogDescription>
+              Team member details
+            </DialogDescription>
+          </DialogHeader>
+          {profileMember && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-14 w-14 ring-2 ring-background shrink-0">
+                  <AvatarImage src={hasRealAvatar(profileMember) ? getMemberAvatarUrl(profileMember) : undefined} />
+                  <AvatarFallback className="bg-primary/20 text-primary text-lg font-medium">
+                    {getMemberInitials(profileMember)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="font-semibold text-lg truncate">{profileMember.name}</p>
+                  <p className="text-sm text-muted-foreground">{profileMember.role}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 text-sm border-t border-border pt-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{profileMember.email}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4 shrink-0" />
+                  <span>{profileMember.location}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Briefcase className="h-4 w-4 shrink-0" />
+                  <span>{profileMember.department}</span>
+                </div>
+                {profileMember.phone && profileMember.phone !== "—" && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="text-xs uppercase tracking-wider w-4">Tel</span>
+                    <span>{profileMember.phone}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4 shrink-0" />
+                  <span>Joined {profileMember.joinedDate}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="text-muted-foreground">Tasks completed</span>
+                  <span className="font-medium">{profileMember.tasksCompleted}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileMember(null)}>
+              Close
+            </Button>
+            {profileMember && (
+              <Button
+                className="bg-primary hover:bg-primary/90"
+                onClick={() => {
+                  setProfileMember(null)
+                  setEditingMember(profileMember)
+                  setEditForm({
+                    name: profileMember.name,
+                    role: profileMember.role,
+                    email: profileMember.email,
+                    phone: profileMember.phone === "—" ? "" : profileMember.phone,
+                    location: profileMember.location === "—" ? "" : profileMember.location,
+                    department: profileMember.department,
+                  })
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit member
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editingMember} onOpenChange={(open) => !open && setEditingMember(null)}>
+        <DialogContent className="border-glass-border sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>
+              Update the member details below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Full Name *</Label>
+              <Input
+                id="edit-name"
+                placeholder="John Doe"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-email">Email *</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                placeholder="john.doe@company.com"
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role">Role *</Label>
+              <Input
+                id="edit-role"
+                placeholder="Senior Developer"
+                value={editForm.role}
+                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-department">Department *</Label>
+              <Select
+                value={editForm.department}
+                onValueChange={(value) => setEditForm({ ...editForm, department: value })}
+              >
+                <SelectTrigger className="glass-subtle border-glass-border">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent className="glass border-glass-border">
+                  <SelectItem value="Engineering">Engineering</SelectItem>
+                  <SelectItem value="Design">Design</SelectItem>
+                  <SelectItem value="Product">Product</SelectItem>
+                  <SelectItem value="Marketing">Marketing</SelectItem>
+                  <SelectItem value="General">General</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                placeholder="+1 (555) 123-4567"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-location">Location</Label>
+              <Input
+                id="edit-location"
+                placeholder="San Francisco, CA"
+                value={editForm.location}
+                onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                className="glass-subtle border-glass-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMember(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEditMember}
+              disabled={!editForm.name || !editForm.email || !editForm.role || !editForm.department}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Save changes
             </Button>
           </DialogFooter>
         </DialogContent>
