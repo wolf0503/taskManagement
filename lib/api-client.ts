@@ -33,6 +33,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Optional request options (e.g. for cancellation) */
+export interface ApiRequestOptions {
+  signal?: AbortSignal
+}
+
 class ApiClient {
   private baseURL: string
   private accessToken: string | null = null
@@ -130,11 +135,11 @@ class ApiClient {
   }
 
   /**
-   * Make HTTP request with automatic token refresh and optional 429 retry
+   * Make HTTP request with automatic token refresh, optional 429 retry, and optional AbortSignal
    */
   private async request<T = any>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit & { signal?: AbortSignal } = {},
     retried429 = false
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
@@ -154,6 +159,7 @@ class ApiClient {
         ...options,
         headers,
         credentials: 'include', // Include cookies for refresh token
+        signal: options.signal,
       })
 
       // Handle 401 - Unauthorized (token expired)
@@ -172,6 +178,7 @@ class ApiClient {
             ...options,
             headers: retryHeaders,
             credentials: 'include',
+            signal: options.signal,
           })
         } catch (refreshError) {
           // Refresh failed, will be handled below
@@ -231,6 +238,10 @@ class ApiClient {
         throw error
       }
 
+      // AbortError when request was cancelled (e.g. component unmount)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
+      }
       // Network or parsing error (e.g. backend not running, wrong API URL, CORS)
       const isNetworkError = error instanceof TypeError && error.message === 'Failed to fetch'
       const message = isNetworkError
@@ -241,41 +252,60 @@ class ApiClient {
   }
 
   /**
-   * GET request
+   * GET request (optional signal for cancellation, e.g. on component unmount)
    */
-  async get<T = any>(endpoint: string, params?: Record<string, any>): Promise<ApiResponse<T>> {
+  async get<T = any>(
+    endpoint: string,
+    params?: Record<string, any>,
+    requestOptions?: ApiRequestOptions
+  ): Promise<ApiResponse<T>> {
     const queryString = params ? `?${new URLSearchParams(params).toString()}` : ''
     return this.request<T>(`${endpoint}${queryString}`, {
       method: 'GET',
+      signal: requestOptions?.signal,
     })
   }
 
   /**
    * POST request
    */
-  async post<T = any>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async post<T = any>(
+    endpoint: string,
+    body?: any,
+    requestOptions?: ApiRequestOptions
+  ): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined,
+      signal: requestOptions?.signal,
     })
   }
 
   /**
    * PATCH request
    */
-  async patch<T = any>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async patch<T = any>(
+    endpoint: string,
+    body?: any,
+    requestOptions?: ApiRequestOptions
+  ): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined,
+      signal: requestOptions?.signal,
     })
   }
 
   /**
    * DELETE request
    */
-  async delete<T = any>(endpoint: string): Promise<ApiResponse<T>> {
+  async delete<T = any>(
+    endpoint: string,
+    requestOptions?: ApiRequestOptions
+  ): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'DELETE',
+      signal: requestOptions?.signal,
     })
   }
 }

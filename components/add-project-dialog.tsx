@@ -32,7 +32,6 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
-import { toast } from "@/hooks/use-toast"
 
 // Color options for projects (hex colors as per backend)
 const colorOptions = [
@@ -82,20 +81,10 @@ export function AddProjectDialog({ open, onOpenChange }: AddProjectDialogProps) 
         status: data.status,
         color: data.color,
       })
-
-      toast({
-        title: "Project created",
-        description: `${data.name} has been created successfully.`,
-      })
-
       form.reset()
       onOpenChange(false)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create project. Please try again.",
-        variant: "destructive",
-      })
+    } catch {
+      // Error toast shown by ProjectsContext
     } finally {
       setIsSubmitting(false)
     }

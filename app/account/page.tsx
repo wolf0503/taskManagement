@@ -45,7 +45,7 @@ export default function AccountPage() {
   const tabParam = searchParams.get("tab")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState(tabParam || "profile")
-  const { user, refreshUser } = useAuth()
+  const { user, refreshUser, setUserFromProfile, getAvatarUrl } = useAuth()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -122,8 +122,8 @@ export default function AccountPage() {
     }
     setAvatarUploading(true)
     try {
-      await authService.uploadAvatar(file)
-      await refreshUser()
+      const updatedUser = await authService.uploadAvatar(file)
+      setUserFromProfile(updatedUser)
       toast({ title: "Photo updated", description: "Your profile photo has been updated." })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to upload photo."
@@ -137,8 +137,8 @@ export default function AccountPage() {
   const handleRemovePhoto = async () => {
     setAvatarUploading(true)
     try {
-      await authService.updateProfile({ avatar: null })
-      await refreshUser()
+      const updatedUser = await authService.updateProfile({ avatar: null })
+      setUserFromProfile(updatedUser)
       toast({ title: "Photo removed", description: "Your profile photo has been removed." })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to remove photo."
@@ -228,7 +228,7 @@ export default function AccountPage() {
                   />
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20 ring-4 ring-background">
-                      <AvatarImage src={user?.avatar ?? undefined} />
+                      <AvatarImage src={getAvatarUrl() ?? undefined} />
                       <AvatarFallback className="bg-primary/20 text-primary text-xl">
                         {initials}
                       </AvatarFallback>

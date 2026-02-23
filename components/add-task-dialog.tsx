@@ -158,24 +158,12 @@ export function AddTaskDialog({
       }
 
       await addTask(projectId, taskPayload)
-
-      toast({
-        title: "Task created",
-        description: `${data.title} has been added successfully.`,
-      })
-
       form.reset()
       setTagInput("")
       onOpenChange(false)
     } catch (error) {
-      // DEBUG: Log the full error
-      console.error('Task creation error:', error)
-      
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create task. Please try again.",
-        variant: "destructive",
-      })
+      console.error("Task creation error:", error)
+      // Error toast shown by TasksContext
     } finally {
       setIsSubmitting(false)
     }

@@ -22,8 +22,6 @@ import { EditTaskDialog } from "@/components/edit-task-dialog"
 import { Calendar, Clock, MoreHorizontal, Trash2, Edit } from "lucide-react"
 import type { Task } from "@/lib/types"
 import { useTasks } from "@/contexts/tasks-context"
-import { toast } from "@/hooks/use-toast"
-import { ApiError } from "@/lib/api-client"
 
 interface TaskCardProps {
   task: Task
@@ -77,11 +75,9 @@ export function TaskCard({ task, onDragStart, onDragEnd, index, onFilterByAssign
     setIsDeleting(true)
     try {
       await deleteTask(task.id)
-      toast({ title: "Task deleted", description: "The task has been removed." })
       setDeleteDialogOpen(false)
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : "Failed to delete task"
-      toast({ title: "Error", description: message, variant: "destructive" })
+    } catch {
+      // Error toast shown by TasksContext
     } finally {
       setIsDeleting(false)
     }

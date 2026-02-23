@@ -6,6 +6,7 @@ import { authService } from '@/services/auth.service'
 import { websocketService } from '@/services/websocket.service'
 import type { User } from '@/lib/types'
 import { ApiError } from '@/lib/api-client'
+import { API_CONFIG } from '@/lib/api-config'
 
 interface AuthContextType {
   user: User | null
@@ -21,6 +22,10 @@ interface AuthContextType {
   }) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  /** Update user from profile/avatar API response so UI updates immediately and avatar cache is busted */
+  setUserFromProfile: (updatedUser: User) => void
+  /** Avatar URL with cache-bust so browser shows new photo after upload */
+  getAvatarUrl: () => string | undefined
   error: string | null
   clearError: () => void
 }
@@ -29,9 +34,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [avatarVersion, setAvatarVersion] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  const setUserFromProfile = (updatedUser: User) => {
+    setUser(updatedUser)
+    setAvatarVersion((v) => v + 1)
+  }
+
+  const getAvatarUrl = (): string | undefined => {
+    if (!user?.avatar) return undefined
+    let base: string
+    if (user.avatar.startsWith('/uploads/')) {
+      // Proxy via Next.js so browser gets image same-origin (avoids CORS/CORP block)
+      base = `/api${user.avatar}`
+    } else if (user.avatar.startsWith('/')) {
+      base = `${API_CONFIG.API_ORIGIN}${user.avatar}`
+    } else {
+      base = user.avatar
+    }
+    const sep = base.includes('?') ? '&' : '?'
+    return `${base}${sep}v=${avatarVersion}`
+  }
 
   // Load user on mount
   useEffect(() => {
@@ -159,6 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshUser,
+        setUserFromProfile,
+        getAvatarUrl,
         error,
         clearError,
       }}

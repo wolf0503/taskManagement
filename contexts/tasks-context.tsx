@@ -5,6 +5,7 @@ import { tasksService, CreateTaskData, UpdateTaskData, MoveTaskData } from "@/se
 import { websocketService } from "@/services/websocket.service"
 import type { Task } from "@/lib/types"
 import { ApiError } from "@/lib/api-client"
+import { toast } from "@/hooks/use-toast"
 
 interface TasksContextType {
   tasksByProject: Record<string, Task[]>
@@ -112,19 +113,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
     try {
       const newTask = await tasksService.createTask(projectId, taskData)
-      
-      // Optimistic update (will be confirmed by WebSocket event)
       setTasksByProject((prev) => ({
         ...prev,
         [projectId]: [...(prev[projectId] || []), newTask],
       }))
-      
+      toast({ title: "Task created", description: "The task has been added." })
       return newTask
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to create task'
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to create task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
     } finally {
       setIsLoading(false)
@@ -132,144 +130,146 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }
 
   const updateTask = async (taskId: string, updates: UpdateTaskData): Promise<void> => {
-    setIsLoading(true)
+    const previousState = tasksByProject
     setError(null)
 
+    // Optimistic update: apply immediately
+    setTasksByProject((prev) => {
+      const newState = { ...prev }
+      for (const projectId in newState) {
+        newState[projectId] = newState[projectId].map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task
+        )
+      }
+      return newState
+    })
+
     try {
-      const updatedTask = await tasksService.updateTask(taskId, updates)
-      
-      // Optimistic update
-      setTasksByProject((prev) => {
-        const newState = { ...prev }
-        for (const projectId in newState) {
-          newState[projectId] = newState[projectId].map((task) =>
-            task.id === taskId ? { ...task, ...updatedTask } : task
-          )
-        }
-        return newState
-      })
+      await tasksService.updateTask(taskId, updates)
+      toast({ title: "Task updated", description: "Changes have been saved." })
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to update task'
+      setTasksByProject(previousState)
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to update task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const deleteTask = async (taskId: string): Promise<void> => {
-    setIsLoading(true)
+    const previousState = tasksByProject
     setError(null)
+
+    const removedTask = (() => {
+      for (const projectId in previousState) {
+        const task = previousState[projectId]?.find((t) => t.id === taskId)
+        if (task) return { task, projectId }
+      }
+      return null
+    })()
+
+    setTasksByProject((prev) => {
+      const newState = { ...prev }
+      for (const projectId in newState) {
+        newState[projectId] = newState[projectId].filter((t) => t.id !== taskId)
+      }
+      return newState
+    })
 
     try {
       await tasksService.deleteTask(taskId)
-      
-      // Optimistic update
-      setTasksByProject((prev) => {
-        const newState = { ...prev }
-        for (const projectId in newState) {
-          newState[projectId] = newState[projectId].filter(
-            (task) => task.id !== taskId
-          )
-        }
-        return newState
-      })
+      toast({ title: "Task deleted", description: "The task has been removed." })
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to delete task'
+      if (removedTask) {
+        setTasksByProject((prev) => ({
+          ...prev,
+          [removedTask.projectId]: [...(prev[removedTask.projectId] || []), removedTask.task],
+        }))
+      } else {
+        setTasksByProject(previousState)
+      }
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to delete task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const moveTask = async (taskId: string, data: MoveTaskData): Promise<void> => {
-    setIsLoading(true)
+    const previousState = tasksByProject
     setError(null)
+
+    setTasksByProject((prev) => {
+      const newState = { ...prev }
+      for (const projectId in newState) {
+        newState[projectId] = newState[projectId].map((task) =>
+          task.id === taskId
+            ? { ...task, columnId: data.columnId, position: data.position }
+            : task
+        )
+      }
+      return newState
+    })
 
     try {
       await tasksService.moveTask(taskId, data)
-      
-      // Optimistic update
-      setTasksByProject((prev) => {
-        const newState = { ...prev }
-        for (const projectId in newState) {
-          newState[projectId] = newState[projectId].map((task) =>
-            task.id === taskId
-              ? { ...task, columnId: data.columnId, position: data.position }
-              : task
-          )
-        }
-        return newState
-      })
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to move task'
+      setTasksByProject(previousState)
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to move task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const completeTask = async (taskId: string): Promise<void> => {
-    setIsLoading(true)
+    const previousState = tasksByProject
     setError(null)
 
+    setTasksByProject((prev) => {
+      const newState = { ...prev }
+      const now = new Date().toISOString()
+      for (const projectId in newState) {
+        newState[projectId] = newState[projectId].map((task) =>
+          task.id === taskId ? { ...task, completedAt: now } : task
+        )
+      }
+      return newState
+    })
+
     try {
-      const updatedTask = await tasksService.completeTask(taskId)
-      
-      // Optimistic update
-      setTasksByProject((prev) => {
-        const newState = { ...prev }
-        for (const projectId in newState) {
-          newState[projectId] = newState[projectId].map((task) =>
-            task.id === taskId ? { ...task, ...updatedTask } : task
-          )
-        }
-        return newState
-      })
+      await tasksService.completeTask(taskId)
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to complete task'
+      setTasksByProject(previousState)
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to complete task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const uncompleteTask = async (taskId: string): Promise<void> => {
-    setIsLoading(true)
+    const previousState = tasksByProject
     setError(null)
 
+    setTasksByProject((prev) => {
+      const newState = { ...prev }
+      for (const projectId in newState) {
+        newState[projectId] = newState[projectId].map((task) =>
+          task.id === taskId ? { ...task, completedAt: null } : task
+        )
+      }
+      return newState
+    })
+
     try {
-      const updatedTask = await tasksService.uncompleteTask(taskId)
-      
-      // Optimistic update
-      setTasksByProject((prev) => {
-        const newState = { ...prev }
-        for (const projectId in newState) {
-          newState[projectId] = newState[projectId].map((task) =>
-            task.id === taskId ? { ...task, ...updatedTask } : task
-          )
-        }
-        return newState
-      })
+      await tasksService.uncompleteTask(taskId)
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to uncomplete task'
+      setTasksByProject(previousState)
+      const errorMessage = err instanceof ApiError ? err.message : "Failed to uncomplete task"
       setError(errorMessage)
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
       throw err
-    } finally {
-      setIsLoading(false)
     }
   }
 

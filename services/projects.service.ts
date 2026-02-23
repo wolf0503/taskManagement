@@ -42,15 +42,19 @@ export interface UpdateMemberRoleData {
 
 class ProjectsService {
   /**
-   * Get all projects for authenticated user
+   * Get all projects for authenticated user (optional signal to cancel on unmount)
    */
-  async getProjects(params?: GetProjectsParams): Promise<{
+  async getProjects(
+    params?: GetProjectsParams,
+    options?: { signal?: AbortSignal }
+  ): Promise<{
     projects: Project[]
     meta: PaginationMeta
   }> {
     const response = await apiClient.get<Project[]>(
       API_ENDPOINTS.PROJECTS.BASE,
-      params
+      params,
+      { signal: options?.signal }
     )
     return {
       projects: response.data || [],

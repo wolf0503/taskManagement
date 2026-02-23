@@ -11,8 +11,12 @@ const rawWs = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000'
 const baseUrl = rawBase.replace('localhost:5000', 'localhost:4000')
 const wsUrl = rawWs.replace('localhost:5000', 'localhost:4000')
 
+/** Origin only (e.g. http://localhost:4000) for relative asset URLs like /uploads/... */
+export const API_ORIGIN = new URL(baseUrl).origin
+
 export const API_CONFIG = {
   BASE_URL: baseUrl,
+  API_ORIGIN,
   WEBSOCKET_URL: wsUrl,
   TIMEOUT: 30000, // 30 seconds
   TOKEN_REFRESH_BUFFER: 60000, // Refresh token 1 minute before expiration

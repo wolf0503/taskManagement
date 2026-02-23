@@ -38,7 +38,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTasks } from "@/contexts/tasks-context"
 import { useColumns } from "@/contexts/columns-context"
 import { projectsService } from "@/services/projects.service"
-import { toast } from "@/hooks/use-toast"
 import { CalendarIcon, Plus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProjectMember, Task } from "@/lib/types"
@@ -165,15 +164,9 @@ export function EditTaskDialog({
         assigneeId,
         dueDate: dueDateString,
       })
-
-      toast({ title: "Task updated", description: "Changes have been saved." })
       onOpenChange(false)
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update task.",
-        variant: "destructive",
-      })
+    } catch {
+      // Error toast shown by TasksContext
     } finally {
       setIsSubmitting(false)
     }

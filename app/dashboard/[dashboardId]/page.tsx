@@ -136,7 +136,7 @@ function mapProjectToDashboard(
 export default function DashboardDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, getAvatarUrl } = useAuth()
   const { getProject, updateProject } = useProjects()
   const { getTasks, loadProjectTasks } = useTasks()
   const { getColumns, fetchColumns } = useColumns()
@@ -314,7 +314,7 @@ export default function DashboardDetailPage() {
     const displayName = user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email : "User"
     const newComment = {
       user: displayName,
-      avatar: user?.avatar ?? "/professional-avatar.png",
+      avatar: getAvatarUrl() ?? "/professional-avatar.png",
       text: text,
       time: "Just now"
     }

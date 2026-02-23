@@ -50,7 +50,7 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout } = useAuth()
+  const { user, logout, getAvatarUrl } = useAuth()
   const { projects } = useProjects()
 
   const filteredProjects = searchQuery.trim()
@@ -220,7 +220,7 @@ export function Sidebar({ collapsed: collapsedProp, onCollapsedChange }: Sidebar
                 )}
               >
                 <Avatar className="h-10 w-10 shrink-0 ring-2 ring-primary/30">
-                  <AvatarImage src={user?.avatar ?? undefined} />
+                  <AvatarImage src={getAvatarUrl() ?? undefined} />
                   <AvatarFallback className="bg-primary/20 text-primary">{initials}</AvatarFallback>
                 </Avatar>
                 {!collapsed && (

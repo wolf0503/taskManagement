@@ -30,7 +30,7 @@ import { useAuth } from "@/contexts/auth-context"
 
 export default function Home() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, logout, getAvatarUrl } = useAuth()
 
   // Redirect to sign-in if not authenticated (after loading)
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function Home() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative gap-2 pl-2 pr-3">
                     <Avatar className="h-8 w-8 ring-2 ring-background">
-                      <AvatarImage src={user?.avatar ?? undefined} />
+                      <AvatarImage src={getAvatarUrl() ?? undefined} />
                       <AvatarFallback className="bg-primary/20 text-primary text-xs">
                         {userName
                           ? userName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)

@@ -32,7 +32,6 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useProjects } from "@/contexts/projects-context"
-import { toast } from "@/hooks/use-toast"
 import type { Project } from "@/lib/types"
 
 const colorOptions = [
@@ -96,18 +95,10 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
         status: data.status,
         color: data.color,
       })
-      toast({
-        title: "Project updated",
-        description: `${data.name} has been updated successfully.`,
-      })
       onOpenChange(false)
       onSuccess?.()
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update project. Please try again.",
-        variant: "destructive",
-      })
+    } catch {
+      // Error toast shown by ProjectsContext
     } finally {
       setIsSubmitting(false)
     }
