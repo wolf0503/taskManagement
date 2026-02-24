@@ -97,13 +97,27 @@ class AuthService {
   }
 
   /**
-   * Upload avatar (multipart/form-data with field "avatar")
+   * Upload avatar (multipart/form-data with field "avatar").
+   * Uses a timeout so the UI does not hang if the backend is slow or unreachable.
    */
-  async uploadAvatar(file: File): Promise<User> {
+  async uploadAvatar(file: File, options?: { signal?: AbortSignal }) {
     const formData = new FormData()
     formData.append('avatar', file)
-    const response = await apiClient.post<User>(API_ENDPOINTS.AUTH.UPLOAD_AVATAR, formData)
-    return response.data!
+    const UPLOAD_TIMEOUT_MS = 60_000 // 60 seconds
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS)
+    const signal = options?.signal ?? controller.signal
+    try {
+      const response = await apiClient.post<User>(API_ENDPOINTS.AUTH.UPLOAD_AVATAR, formData, { signal })
+      clearTimeout(timeoutId)
+      return response.data!
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Upload timed out. Please check your connection and try again.')
+      }
+      throw err
+    }
   }
 
   /**

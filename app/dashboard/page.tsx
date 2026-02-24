@@ -113,6 +113,26 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
 
 const CHART_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
 
+// Same as Projects page: hex palette for card border/background/icon when project.color is missing or a Tailwind class
+const PROJECT_COLOR_PALETTE = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#EF4444"]
+
+function getDashboardProjectColorStyles(project: { color?: string }, index: number) {
+  const raw = project.color?.trim()
+  const isHex = raw?.startsWith("#")
+  const fallbackHex = PROJECT_COLOR_PALETTE[index % PROJECT_COLOR_PALETTE.length]
+  const accentHex = isHex && raw ? raw : fallbackHex
+  let iconStyle: { backgroundColor: string } | undefined
+  let iconClassName: string | undefined
+  if (isHex && raw) {
+    iconStyle = { backgroundColor: raw }
+  } else if (raw && raw.startsWith("bg-")) {
+    iconClassName = raw
+  } else {
+    iconStyle = { backgroundColor: fallbackHex }
+  }
+  return { accentHex, iconStyle, iconClassName }
+}
+
 /** Run async tasks with a concurrency limit to avoid rate limiting (e.g. 429). */
 async function runWithConcurrencyLimit<T, R>(
   items: T[],
@@ -622,7 +642,9 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projects.map((project: DashboardProject) => (
+              {projects.map((project: DashboardProject, index: number) => {
+                const colorStyles = getDashboardProjectColorStyles(project, index)
+                return (
                 <div
                   key={project.id}
                   role="button"
@@ -630,10 +652,15 @@ export default function DashboardPage() {
                   onClick={() => router.push(`/dashboard/${project.id}`)}
                   onKeyDown={(e) => e.key === "Enter" && router.push(`/dashboard/${project.id}`)}
                   className={cn(
-                    "group rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden",
+                    "group rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl overflow-hidden border-l-4",
                     "hover:border-primary/40 hover:bg-card/80 transition-all cursor-pointer",
+                    "hover:scale-[1.02] hover:shadow-xl card-hover",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   )}
+                  style={{
+                    borderLeftColor: colorStyles.accentHex,
+                    backgroundColor: `${colorStyles.accentHex}0D`,
+                  }}
                 >
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -641,9 +668,9 @@ export default function DashboardPage() {
                         <div
                           className={cn(
                             "h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0",
-                            project.color?.startsWith("#") ? "" : project.color
+                            colorStyles.iconClassName
                           )}
-                          style={project.color?.startsWith("#") ? { backgroundColor: project.color } : undefined}
+                          style={colorStyles.iconStyle}
                         >
                           <FolderKanban className="h-5 w-5 text-white" />
                         </div>
@@ -761,7 +788,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>

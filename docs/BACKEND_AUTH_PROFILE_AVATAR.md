@@ -194,6 +194,29 @@ The `avatar` field in `data` must be the full URL of the stored image (or `null`
 
 ---
 
+## Database persistence (required)
+
+The backend **must** persist avatar in the database so that the photo is saved and removed correctly.
+
+### Upload new photo (POST `/auth/me/avatar`)
+
+1. Accept the uploaded file (multipart field `avatar`).
+2. Validate type (e.g. image/jpeg, image/png, image/gif, image/webp) and size (e.g. max 5 MB).
+3. **Save the file** to your storage (e.g. disk under `uploads/`, or cloud storage).
+4. **Save the avatar URL/path in the database**: update the current user’s `avatar` field with the new URL (e.g. `/uploads/avatars/{userId}-{timestamp}.jpg` or a full URL). Persist this in the user record so it survives restarts.
+5. If the user had a previous avatar, optionally delete the old file from storage.
+6. Return `200 OK` with the updated User object (including the new `avatar` value).
+
+### Remove photo (PATCH `/auth/me` with `{ "avatar": null }`)
+
+1. **Update the database**: set the current user’s `avatar` field to `null` in the user table.
+2. Optionally **delete the avatar file** from storage (so it is removed from disk/blob storage as well).
+3. Return `200 OK` with the updated User object (`avatar: null`).
+
+The frontend already calls these endpoints and updates the UI from the response; the backend is responsible for persisting and deleting avatar data in the database (and storage) as above.
+
+---
+
 ## Summary
 
 | Method | Path            | Description        | Body |
@@ -201,4 +224,4 @@ The `avatar` field in `data` must be the full URL of the stored image (or `null`
 | PATCH  | `/auth/me`      | Update profile     | JSON: firstName, lastName, email?, phone?, bio?, location?, avatar? (null to remove) |
 | POST   | `/auth/me/avatar` | Upload new avatar | multipart/form-data, field `avatar` (file) |
 
-After implementing these two routes, the frontend **Account settings → Profile** tab will be able to save profile changes, upload a new photo, and remove the avatar.
+After implementing these two routes **with database persistence** as above, the frontend **Account settings → Profile** tab will save the new photo in the database on upload and remove it from the database on Remove.
