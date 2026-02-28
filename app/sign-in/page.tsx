@@ -60,9 +60,8 @@ export default function SignInPage() {
         const retryAfter = err.details?.retryAfter
         const seconds = retryAfter ? parseInt(String(retryAfter), 10) : DEFAULT_RATE_LIMIT_SECONDS
         setCountdownSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_RATE_LIMIT_SECONDS)
-      } else {
-        console.error('Login failed:', err)
       }
+      // Error message is already shown in UI via auth context error state
     }
   }
 

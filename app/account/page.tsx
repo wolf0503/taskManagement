@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { authService } from "@/services/auth.service"
+import { ApiError } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -36,9 +37,70 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const MAX_AVATAR_SIZE_MB = 5
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+
+const NOTIFICATION_PREFS_KEY = "account-notification-prefs"
+
+export interface NotificationPrefs {
+  emailTaskUpdates: boolean
+  emailProjectActivity: boolean
+  emailTeamMentions: boolean
+  emailDeadlineReminders: boolean
+  emailWeeklySummary: boolean
+  pushDesktop: boolean
+  pushMobile: boolean
+}
+
+const defaultNotificationPrefs: NotificationPrefs = {
+  emailTaskUpdates: true,
+  emailProjectActivity: true,
+  emailTeamMentions: true,
+  emailDeadlineReminders: true,
+  emailWeeklySummary: false,
+  pushDesktop: true,
+  pushMobile: true,
+}
+
+function loadNotificationPrefs(): NotificationPrefs {
+  if (typeof window === "undefined") return defaultNotificationPrefs
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY)
+    if (!raw) return defaultNotificationPrefs
+    const parsed = JSON.parse(raw) as Partial<NotificationPrefs>
+    return { ...defaultNotificationPrefs, ...parsed }
+  } catch {
+    return defaultNotificationPrefs
+  }
+}
+
+function saveNotificationPrefs(prefs: NotificationPrefs) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    // ignore
+  }
+}
 
 export default function AccountPage() {
   const searchParams = useSearchParams()
@@ -59,6 +121,29 @@ export default function AccountPage() {
   })
   const [profileSaving, setProfileSaving] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs)
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [twoFaDialogOpen, setTwoFaDialogOpen] = useState(false)
+  const [exportRequested, setExportRequested] = useState(false)
+  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false)
+  const [twoFaQrCode, setTwoFaQrCode] = useState<string | null>(null)
+  const [twoFaCode, setTwoFaCode] = useState("")
+  const [twoFaLoading, setTwoFaLoading] = useState(false)
+  const [twoFaDisableLoading, setTwoFaDisableLoading] = useState(false)
+
+  useEffect(() => {
+    setNotificationPrefs(loadNotificationPrefs())
+  }, [])
+
+  const setNotificationPref = <K extends keyof NotificationPrefs>(key: K, value: NotificationPrefs[K]) => {
+    const next = { ...notificationPrefs, [key]: value }
+    setNotificationPrefs(next)
+    saveNotificationPrefs(next)
+  }
 
   useEffect(() => {
     if (tabParam) setActiveTab(tabParam)
@@ -85,7 +170,7 @@ export default function AccountPage() {
   const handleSaveProfile = async () => {
     setProfileSaving(true)
     try {
-      await authService.updateProfile({
+      const updatedUser = await authService.updateProfile({
         firstName: profile.firstName.trim() || undefined,
         lastName: profile.lastName.trim() || undefined,
         email: profile.email.trim() || undefined,
@@ -93,7 +178,7 @@ export default function AccountPage() {
         bio: profile.bio.trim() || undefined,
         location: profile.location.trim() || undefined,
       })
-      await refreshUser()
+      setUserFromProfile(updatedUser)
       toast({ title: "Profile saved", description: "Your changes have been saved." })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to save profile."
@@ -146,6 +231,121 @@ export default function AccountPage() {
     } finally {
       setAvatarUploading(false)
     }
+  }
+
+  const handleChangePassword = async () => {
+    if (passwordForm.newPassword.length < 8) {
+      toast({ title: "Invalid password", description: "New password must be at least 8 characters.", variant: "destructive" })
+      return
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({ title: "Passwords don't match", description: "New password and confirmation must match.", variant: "destructive" })
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      await authService.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      })
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
+      toast({ title: "Password updated", description: "Your password has been changed." })
+    } catch (err: unknown) {
+      let message = err instanceof Error ? err.message : "Failed to update password."
+      if (err instanceof ApiError && err.statusCode === 401) {
+        message = "Session expired or invalid. Please sign out, sign in again, then try changing your password."
+      }
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
+
+  const handleRequestExport = () => {
+    setExportRequested(true)
+    toast({ title: "Export requested", description: "You will receive an email when your data export is ready." })
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE") {
+      toast({ title: "Confirmation required", description: 'Type DELETE to confirm.', variant: "destructive" })
+      return
+    }
+    setDeleteAccountLoading(true)
+    try {
+      await authService.deleteAccount()
+      toast({ title: "Account deleted", description: "Your account has been deleted." })
+      setDeleteAccountDialogOpen(false)
+      setDeleteConfirmText("")
+      await authService.logout()
+      window.location.href = "/"
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete account."
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setDeleteAccountLoading(false)
+    }
+  }
+
+  const memberSinceFormatted = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "—"
+
+  const handle2FAEnableStart = async () => {
+    setTwoFaLoading(true)
+    try {
+      const { qrCode } = await authService.enable2FA()
+      setTwoFaQrCode(qrCode)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to enable 2FA."
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setTwoFaLoading(false)
+    }
+  }
+
+  const handle2FAVerify = async () => {
+    const code = twoFaCode.replace(/\s/g, "")
+    if (!code || code.length < 6) {
+      toast({ title: "Invalid code", description: "Enter the 6-digit code from your app.", variant: "destructive" })
+      return
+    }
+    setTwoFaLoading(true)
+    try {
+      await authService.verify2FA(code)
+      await refreshUser()
+      setTwoFaDialogOpen(false)
+      setTwoFaQrCode(null)
+      setTwoFaCode("")
+      toast({ title: "2FA enabled", description: "Two-factor authentication is now active." })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to verify code."
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setTwoFaLoading(false)
+    }
+  }
+
+  const handle2FADisable = async () => {
+    setTwoFaDisableLoading(true)
+    try {
+      await authService.disable2FA()
+      await refreshUser()
+      setTwoFaDialogOpen(false)
+      setTwoFaQrCode(null)
+      toast({ title: "2FA disabled", description: "Two-factor authentication has been turned off." })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to disable 2FA."
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setTwoFaDisableLoading(false)
+    }
+  }
+
+  const closeTwoFaDialog = () => {
+    setTwoFaDialogOpen(false)
+    setTwoFaQrCode(null)
+    setTwoFaCode("")
   }
 
   return (
@@ -377,7 +577,10 @@ export default function AccountPage() {
                         Get notified when tasks are assigned or updated
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.emailTaskUpdates}
+                      onCheckedChange={(v) => setNotificationPref("emailTaskUpdates", v)}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -387,7 +590,10 @@ export default function AccountPage() {
                         Receive updates about project changes
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.emailProjectActivity}
+                      onCheckedChange={(v) => setNotificationPref("emailProjectActivity", v)}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -397,7 +603,10 @@ export default function AccountPage() {
                         Get notified when someone mentions you
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.emailTeamMentions}
+                      onCheckedChange={(v) => setNotificationPref("emailTeamMentions", v)}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -407,7 +616,10 @@ export default function AccountPage() {
                         Receive reminders about upcoming deadlines
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.emailDeadlineReminders}
+                      onCheckedChange={(v) => setNotificationPref("emailDeadlineReminders", v)}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -417,7 +629,10 @@ export default function AccountPage() {
                         Get a weekly digest of your activity
                       </p>
                     </div>
-                    <Switch />
+                    <Switch
+                      checked={notificationPrefs.emailWeeklySummary}
+                      onCheckedChange={(v) => setNotificationPref("emailWeeklySummary", v)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -437,7 +652,10 @@ export default function AccountPage() {
                         Show notifications on your desktop
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.pushDesktop}
+                      onCheckedChange={(v) => setNotificationPref("pushDesktop", v)}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -447,7 +665,10 @@ export default function AccountPage() {
                         Receive push notifications on mobile devices
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={notificationPrefs.pushMobile}
+                      onCheckedChange={(v) => setNotificationPref("pushMobile", v)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -467,6 +688,9 @@ export default function AccountPage() {
                     <Input
                       id="current-password"
                       type="password"
+                      placeholder="••••••••"
+                      value={passwordForm.currentPassword}
+                      onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
                       className="glass-subtle border-glass-border"
                     />
                   </div>
@@ -475,6 +699,9 @@ export default function AccountPage() {
                     <Input
                       id="new-password"
                       type="password"
+                      placeholder="••••••••"
+                      value={passwordForm.newPassword}
+                      onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
                       className="glass-subtle border-glass-border"
                     />
                   </div>
@@ -483,12 +710,22 @@ export default function AccountPage() {
                     <Input
                       id="confirm-password"
                       type="password"
+                      placeholder="••••••••"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
                       className="glass-subtle border-glass-border"
                     />
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline">Cancel</Button>
-                    <Button>Update Password</Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleChangePassword} disabled={passwordSaving}>
+                      {passwordSaving ? "Updating…" : "Update Password"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -513,12 +750,18 @@ export default function AccountPage() {
                         </p>
                       </div>
                     </div>
-                    <Badge variant="outline" className="bg-status-done/10 text-status-done border-status-done/30">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Enabled
+                    <Badge variant="outline" className={user?.twoFactorEnabled ? "bg-status-done/10 text-status-done border-status-done/30" : "bg-muted text-muted-foreground"}>
+                      {user?.twoFactorEnabled ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Enabled
+                        </>
+                      ) : (
+                        "Not enabled"
+                      )}
                     </Badge>
                   </div>
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={() => setTwoFaDialogOpen(true)}>
                     Configure 2FA
                   </Button>
                 </CardContent>
@@ -558,7 +801,13 @@ export default function AccountPage() {
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">Revoke</Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toast({ title: "Sessions", description: "Session management is not available yet." })}
+                    >
+                      Revoke
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -585,7 +834,7 @@ export default function AccountPage() {
                   <Separator />
                   <div>
                     <p className="text-sm text-muted-foreground">Member Since</p>
-                    <p className="font-medium">January 15, 2023</p>
+                    <p className="font-medium">{memberSinceFormatted}</p>
                   </div>
                   <Separator />
                   <div>
@@ -606,9 +855,14 @@ export default function AccountPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button variant="outline" className="w-full gap-2">
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={handleRequestExport}
+                    disabled={exportRequested}
+                  >
                     <Download className="h-4 w-4" />
-                    Request Data Export
+                    {exportRequested ? "Export requested" : "Request Data Export"}
                   </Button>
                 </CardContent>
               </Card>
@@ -630,7 +884,11 @@ export default function AccountPage() {
                       </p>
                     </div>
                   </div>
-                  <Button variant="destructive" className="w-full gap-2">
+                  <Button
+                    variant="destructive"
+                    className="w-full gap-2"
+                    onClick={() => setDeleteAccountDialogOpen(true)}
+                  >
                     <Trash2 className="h-4 w-4" />
                     Delete My Account
                   </Button>
@@ -639,6 +897,104 @@ export default function AccountPage() {
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* 2FA configuration dialog */}
+        <Dialog open={twoFaDialogOpen} onOpenChange={(open) => !open && closeTwoFaDialog()}>
+          <DialogContent className="glass border-glass-border sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Two-Factor Authentication</DialogTitle>
+              <DialogDescription>
+                {user?.twoFactorEnabled
+                  ? "Disable 2FA to sign in with only your password."
+                  : twoFaQrCode
+                    ? "Scan the QR code with your authenticator app, then enter the 6-digit code below."
+                    : "Add an extra layer of security by enabling an authenticator app."}
+              </DialogDescription>
+            </DialogHeader>
+            {user?.twoFactorEnabled ? (
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={closeTwoFaDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handle2FADisable}
+                  disabled={twoFaDisableLoading}
+                >
+                  {twoFaDisableLoading ? "Disabling…" : "Disable 2FA"}
+                </Button>
+              </DialogFooter>
+            ) : twoFaQrCode ? (
+              <div className="space-y-4">
+                <div className="flex justify-center">
+                  <img src={twoFaQrCode} alt="QR code for authenticator" className="h-48 w-48 rounded-lg border bg-white p-2" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="2fa-code">Verification code</Label>
+                  <Input
+                    id="2fa-code"
+                    placeholder="000000"
+                    maxLength={8}
+                    value={twoFaCode}
+                    onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, ""))}
+                    className="glass-subtle border-glass-border font-mono text-center text-lg tracking-widest"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={closeTwoFaDialog}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handle2FAVerify} disabled={twoFaLoading}>
+                    {twoFaLoading ? "Verifying…" : "Verify and enable"}
+                  </Button>
+                </DialogFooter>
+              </div>
+            ) : (
+              <DialogFooter>
+                <Button variant="outline" onClick={closeTwoFaDialog}>
+                  Cancel
+                </Button>
+                <Button onClick={handle2FAEnableStart} disabled={twoFaLoading}>
+                  {twoFaLoading ? "Generating…" : "Generate QR code"}
+                </Button>
+              </DialogFooter>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete account confirmation */}
+        <AlertDialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
+          <AlertDialogContent className="glass border-glass-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Delete account</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. All your data will be permanently removed. Type <strong>DELETE</strong> below to confirm.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-2">
+              <Input
+                placeholder="Type DELETE to confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="glass-subtle border-glass-border font-mono"
+                autoComplete="off"
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeleteConfirmText("")}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => {
+                  e.preventDefault()
+                  handleDeleteAccount()
+                }}
+                disabled={deleteAccountLoading || deleteConfirmText !== "DELETE"}
+              >
+                {deleteAccountLoading ? "Deleting…" : "Delete my account"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   )

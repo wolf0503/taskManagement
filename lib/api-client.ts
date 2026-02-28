@@ -144,11 +144,14 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseURL}${endpoint}`
     const isFormData = options.body instanceof FormData
+    // Sync token from localStorage so auth works after hydration / reload
+    if (typeof window !== 'undefined' && !this.accessToken) {
+      this.accessToken = localStorage.getItem('accessToken')
+    }
     const headers: Record<string, string> = {
       ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers as Record<string, string> || {}),
     }
-
     // Add authorization header if token exists
     if (this.accessToken) {
       headers['Authorization'] = `Bearer ${this.accessToken}`

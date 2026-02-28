@@ -51,21 +51,33 @@ class AuthService {
     return response.data!
   }
 
+  /** Timeout for login so the UI doesn't hang if the backend is down (ms). */
+  private static readonly LOGIN_TIMEOUT_MS = 20_000
+
   /**
-   * Login user
+   * Login user (with timeout so "Signing in..." doesn't hang forever)
    */
   async login(data: LoginData): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>(
-      API_ENDPOINTS.AUTH.LOGIN,
-      data
-    )
-    
-    // Store access token
-    if (response.data?.accessToken) {
-      apiClient.setToken(response.data.accessToken)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), AuthService.LOGIN_TIMEOUT_MS)
+    try {
+      const response = await apiClient.post<AuthResponse>(
+        API_ENDPOINTS.AUTH.LOGIN,
+        data,
+        { signal: controller.signal }
+      )
+      clearTimeout(timeoutId)
+      if (response.data?.accessToken) {
+        apiClient.setToken(response.data.accessToken)
+      }
+      return response.data!
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Server is not responding. Check that the backend is running (e.g. on port 4000) and try again.')
+      }
+      throw err
     }
-    
-    return response.data!
   }
 
   /**
@@ -137,9 +149,14 @@ class AuthService {
   }
 
   /**
-   * Change password
+   * Change password (PATCH /auth/change-password; requires auth)
+   * Syncs token from localStorage so the request is always sent with the current token.
    */
   async changePassword(data: ChangePasswordData): Promise<void> {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('accessToken')
+      if (token) apiClient.setToken(token)
+    }
     await apiClient.patch(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data)
   }
 
@@ -179,6 +196,14 @@ class AuthService {
    */
   async disable2FA(): Promise<void> {
     await apiClient.delete(API_ENDPOINTS.AUTH.TWO_FA.DISABLE)
+  }
+
+  /**
+   * Delete current user account (irreversible)
+   */
+  async deleteAccount(): Promise<void> {
+    await apiClient.delete(API_ENDPOINTS.AUTH.DELETE_ACCOUNT)
+    apiClient.clearAuth()
   }
 
   /**

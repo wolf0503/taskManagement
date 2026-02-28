@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(response.user)
       router.push('/dashboard')
     } catch (err) {
-      const errorMessage = err instanceof ApiError
+      const errorMessage = err instanceof Error
         ? err.message
         : 'Login failed. Please check your credentials.'
       setError(errorMessage)
